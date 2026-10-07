@@ -116,3 +116,8 @@ Agenda de contas possui Lista | Calendário abaixo do mês. Metas e investimento
 Agenda de contas mostra somente a lista, sem seletor de calendário. Metas e investimentos possui abas Metas | Investimentos com fundo claro e seleção branca, logo abaixo do título.
 
 Desativar Empréstimos no menu Você oculta a navegação, inclusão, vencimentos na agenda e lançamentos identificados como empréstimos nas listas. Contratos, pagamentos e histórico são preservados para reativação.
+
+## Perfis financeiros e planos pagos
+Plus, Pro e Família liberam Empréstimos, Bivvo IA, Empresa e a criação de Casal. O perfil Pessoal mantém os dados existentes. Empresa guarda seus próprios lançamentos, cartões, contas, metas, investimentos e empréstimos, sincronizados na mesma conta sem misturar os saldos. Casal usa duas contas e um espaço compartilhado com entradas e gastos próprios; o plano pago do responsável libera o espaço para a pessoa convidada.
+
+**Antes de publicar:** execute `supabase-perfis-pagos.sql` no SQL Editor do Supabase. A migração protege alterações em empréstimos e Empresa no servidor e cria o aceite de convite de casal com limite atômico de duas pessoas. As tabelas do Espaço Família de `supabase-family.sql` precisam existir. A migração não foi aplicada ao banco publicado nesta entrega. Depois publique o pacote completo no Netlify.

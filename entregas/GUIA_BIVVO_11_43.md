@@ -98,3 +98,6 @@ Agenda reúne contas e faturas pendentes do mês, com acesso aos detalhes e conf
 O botão Falar gasto substitui Ler comprovante e inicia o reconhecimento de voz em português. Confira os dados antes de salvar. Permita o microfone no navegador; se o reconhecimento não estiver disponível, use o campo de texto.
 
 A captura Anotar por texto ou voz fica aberta no topo do Início. Os cartões Repetir um gasto, resumo do mês e Últimos 7 dias ficam desmarcados por padrão em Personalizar início, podendo ser ativados depois.
+
+## Compartilhar empréstimos
+Cada contrato tem Compartilhar: prévia com valor original, juros combinados, principal e juros pendentes, total a pagar e vencimento. Envie pelo WhatsApp, compartilhamento do aparelho ou copie a mensagem. Os saldos refletem os pagamentos já registrados.

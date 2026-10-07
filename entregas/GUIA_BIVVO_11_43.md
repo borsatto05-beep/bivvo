@@ -95,7 +95,7 @@ Movimentações oferece busca em todos os meses por descrição, categoria, valo
 Agenda reúne contas e faturas pendentes do mês, com acesso aos detalhes e confirmação de pagamento existente. O resumo semanal usa os últimos sete dias: entradas recebidas e gastos pagos/compras no cartão, sem misturar saldo inicial, dinheiro guardado ou principal de empréstimo. O estado de sincronização aparece por texto no cabeçalho, distinguindo dados locais, pendência e nuvem.
 
 ## Atalho de voz na tela inicial
-O botão Falar gasto substitui Ler comprovante e inicia o reconhecimento de voz em português. Confira os dados antes de salvar. Permita o microfone no navegador; se o reconhecimento não estiver disponível, use o campo de texto.
+A captura no topo do Início oferece texto e microfone para reconhecimento de voz em português. A faixa de botões Registrar gasto e Falar gasto foi retirada. Confira os dados antes de salvar. Permita o microfone no navegador; se o reconhecimento não estiver disponível, use o campo de texto.
 
 A captura Anotar por texto ou voz fica aberta no topo do Início. Os cartões Repetir um gasto, resumo do mês e Últimos 7 dias ficam desmarcados por padrão em Personalizar início, podendo ser ativados depois.
 

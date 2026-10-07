@@ -93,3 +93,8 @@ Início prioriza valor disponível, registrar gasto, próximas contas, favoritos
 Movimentações oferece busca em todos os meses por descrição, categoria, valor, forma de pagamento e data, inclusive sem acentos. Favoritar no detalhe de um gasto cria somente um modelo no perfil. Repetir abre Novo gasto com os dados preenchidos e a data de hoje; só Adicionar cria um novo lançamento. Remover favorito fica disponível no início. Categoria permanece visível, e pagamento, recorrência e observação ficam em Mais opções; compra no cartão e edição abrem essas opções.
 
 Agenda reúne contas e faturas pendentes do mês, com acesso aos detalhes e confirmação de pagamento existente. O resumo semanal usa os últimos sete dias: entradas recebidas e gastos pagos/compras no cartão, sem misturar saldo inicial, dinheiro guardado ou principal de empréstimo. O estado de sincronização aparece por texto no cabeçalho, distinguindo dados locais, pendência e nuvem.
+
+## Atalho de voz na tela inicial
+O botão Falar gasto substitui Ler comprovante e inicia o reconhecimento de voz em português. Confira os dados antes de salvar. Permita o microfone no navegador; se o reconhecimento não estiver disponível, use o campo de texto.
+
+A captura Anotar por texto ou voz fica aberta no topo do Início. Os cartões Repetir um gasto, resumo do mês e Últimos 7 dias ficam desmarcados por padrão em Personalizar início, podendo ser ativados depois.

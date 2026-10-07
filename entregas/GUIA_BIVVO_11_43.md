@@ -1,6 +1,6 @@
 # BIVVO 11.43.0 — correções e implantação
 
-Validação local: 27 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
+Validação local: 28 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
 
 Esta versão corrige os pontos identificados na análise do ZIP 11.42.10. O pacote contém o código completo, os testes, o novo SQL e `dist/` já gerado. Nenhuma alteração foi aplicada ao Supabase ou ao site de produção durante esta revisão.
 
@@ -21,7 +21,7 @@ Esta versão corrige os pontos identificados na análise do ZIP 11.42.10. O paco
 - **Cobranças:** indisponibilidade da consulta não expira acesso pago. Renovação pendente/rejeitada não corta o período existente. A concessão usa upsert e não renova indefinidamente um pagamento antigo quando a próxima data está ausente. Reembolsos e estornos continuam revogando o acesso.
 - **Webhook:** valida HMAC, rejeita divergência entre ID assinado e conteúdo, deduplica entregas por notificação e usa lease no banco para concorrência. Retorna 503 em falhas transitórias, permitindo nova tentativa. Escritas de planos e histórico são idempotentes. Métricas auxiliares continuam sendo registradas sem bloquear o fluxo.
 - **Scanner:** extrai somente nome do local, data e valor total. Uma chamada curta, com raciocínio interno desativado no Gemini 2.5, reduz o risco de timeout/resposta truncada. A foto original acompanha os detalhes corrigidos para evitar perda de dados por recorte.
-- **Revisão do scanner:** mostra dados encontrados e pede somente os campos faltantes. Cada dado encontrado pode ser corrigido. Não inventa data atual, local ou valor. Em falha, abre os três campos com a foto, sem exigir nova captura.
+- **Revisão do scanner:** abre o formulário normal **Novo gasto**, com dados encontrados preenchidos e campos ausentes em branco. Não mostra a tela separada de confirmação nem a foto. Data ausente deve ser preenchida, sem assumir hoje.
 - **Privacidade:** scanner abre diretamente, sem aviso prévio; controles de consentimento/revogação do TikTok em todas as páginas. O SDK de publicidade não carrega antes da autorização. O evento de servidor exige sessão correspondente ao cadastro, consentimento e rate limit. A URL enviada não inclui query nem fragmento. Página `/privacidade/` e menu Você para revisar permissões, sem botão flutuante; opção de limpar a permissão do assistente.
 - **Dependências:** SDK Supabase 2.49.8 passa a ser servido localmente. A licença e o hash estão em `THIRD_PARTY_NOTICES.md`. Ferramentas de teste têm versões fixadas e lockfile.
 - **Publicação/PWA:** build com lista de extensões públicas; documentos internos, SQL, testes, scripts, `node_modules` e código das funções não entram em `dist/`. Precache completo, identificado pelo conteúdo e com SHA-256 por arquivo. Uma mudança durante a instalação remove o cache parcial e impede ativação. APIs continuam fora do cache.
@@ -75,5 +75,9 @@ Há exemplos **sintéticos** em `tests/fixtures/scan-labels-example.json` e `sca
 - Aplicar e validar as RPCs no Supabase, inclusive isolamento entre usuários e concorrência real do webhook.
 - Confirmar os headers assinados dos eventos reais do Mercado Pago e o ciclo de cobrança, cancelamento e reembolso.
 - Confirmar disponibilidade/modelo/esquema Gemini e avaliar as fotos reais antes de optar pelo modo adaptive.
-- Conferir o PWA instalado e a câmera em Android e iOS; a leitura nativa de QR depende de `BarcodeDetector` e pode não existir em todos os navegadores.
+- Conferir o PWA instalado e a câmera em Android e iOS; o QR usa `BarcodeDetector` quando disponível e jsQR 1.4.0 local como alternativa, inclusive no iPhone.
 - Completar a política com identificação e contato do controlador, prazos de retenção efetivos e condições dos provedores contratados. Esses dados comerciais não constavam no pacote e não foram inventados.
+
+## QR como prioridade
+
+Consulta o QR fiscal internamente, sem abrir o navegador. Dados do portal oficial têm prioridade, seguidos dos campos diretamente codificados no QR; a foto completa somente os campos ausentes. URLs, redirecionamentos, tamanho e tempo de consulta são limitados. QR NFC-e v2 offline pode conter valor e dia; no QR online normalmente esses dados e o nome dependem da consulta fiscal. Falha da Fazenda preserva os dados disponíveis. QR funciona sem chave Gemini; completar a foto requer `GEMINI_API_KEY`. Consulta completa de QR não consome leitura de IA. Nenhum QR é tratado como prova de pagamento; os dados permanecem editáveis no formulário normal.

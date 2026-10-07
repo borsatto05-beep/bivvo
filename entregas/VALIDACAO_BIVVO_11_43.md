@@ -4,7 +4,7 @@ Concluída em 7 de outubro de 2026, localmente, sem alterar serviços de produç
 
 | Verificação | Resultado |
 | --- | --- |
-| Suítes JavaScript | 27 passaram, 0 falharam |
+| Suítes JavaScript | 28 passaram, 0 falharam |
 | SEO estático | 55 URLs verificadas, 0 erros |
 | Sintaxe JavaScript | 95 arquivos verificados, 0 erros |
 | Build Netlify | Concluído; arquivos internos excluídos de dist |
@@ -22,3 +22,9 @@ Atualização visual: botão flutuante Privacidade removido. Revisão de permiss
 ## Scanner simplificado — 07/10/2026
 
 Removido aviso prévio de IA. API e confirmação usam somente local, data e valor. Testadas as sete combinações não vazias de extração parcial, datas inválidas, reembolso de cota em falha e fallback para modelo antigo. No navegador, testadas as oito combinações de campos: dados encontrados preservados e apenas campos faltantes visíveis para preencher. Provedor simulado; leitura real do comprovante do vídeo não foi validada contra Gemini.
+
+## QR prioritário e formulário normal
+
+Novo gasto substitui a tela de confirmação do scanner. Testadas oito combinações de campos preenchidos/ausentes, sem inventar data. QR v2 offline, QR online, HTML/XML fiscal, consulta com erro, redirecionamento para rede privada, prioridade do QR sobre resposta de IA e leitura sem chave Gemini foram testados com respostas simuladas. Consulta real à Fazenda e leitura real de fotos pelo Gemini não foram executadas neste ambiente.
+
+Leitor alternativo jsQR validado em Chromium com `BarcodeDetector` desativado, usando imagem QR sintética, inclusive com aplicativo offline. Não substitui teste em aparelho iOS real.

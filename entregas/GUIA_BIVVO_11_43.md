@@ -103,3 +103,6 @@ A captura Anotar por texto ou voz fica aberta no topo do Início. Os cartões Re
 Cada contrato tem Compartilhar: prévia com valor original, juros combinados, principal e juros pendentes, total a pagar e vencimento. Envie pelo WhatsApp, compartilhamento do aparelho ou copie a mensagem. Os saldos refletem os pagamentos já registrados.
 
 A prévia de compartilhamento usa um cartão visual com total e vencimento em destaque. A mensagem enviada tem ícones e blocos curtos, com valor restante e juros separados.
+
+## Navegação no celular e planejamento
+O botão Adicionar voltou a flutuar acima da barra. Empréstimos voltou à barra inferior quando o módulo está ativo; Agenda ocupa esse lugar quando desativado. Planejamento agrupa contas/orçamento e metas, com Assinaturas, Investimentos e Desafios recolhidos em Mais opções.

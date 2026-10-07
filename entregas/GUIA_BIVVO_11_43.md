@@ -108,3 +108,5 @@ A prévia de compartilhamento usa um cartão visual com total e vencimento em de
 O botão Adicionar voltou a flutuar acima da barra. Empréstimos voltou à barra inferior quando o módulo está ativo; Agenda ocupa esse lugar quando desativado. Planejamento agrupa contas/orçamento e metas, com Assinaturas, Investimentos e Desafios recolhidos em Mais opções.
 
 Planejamento reúne Contas fixas e Assinaturas em Contas recorrentes, com filtros. Metas e investimentos ficam juntos; aplicações podem ser vinculadas a um objetivo, contando no progresso sem duplicar o total acumulado nem gerar transferências pelo vínculo.
+
+As seções de Planejamento agora aparecem em barra horizontal deslizante: Agenda de contas, Contas recorrentes, Orçamento, Metas e investimentos e Desafios. A agenda abre dentro de Planejamento e a barra continua disponível ao trocar de seção.

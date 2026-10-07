@@ -110,3 +110,5 @@ O botão Adicionar voltou a flutuar acima da barra. Empréstimos voltou à barra
 Planejamento reúne Contas fixas e Assinaturas em Contas recorrentes, com filtros. Metas e investimentos ficam juntos; aplicações podem ser vinculadas a um objetivo, contando no progresso sem duplicar o total acumulado nem gerar transferências pelo vínculo.
 
 As seções de Planejamento agora aparecem em barra horizontal deslizante: Agenda de contas, Contas recorrentes, Orçamento, Metas e investimentos e Desafios. A agenda abre dentro de Planejamento e a barra continua disponível ao trocar de seção.
+
+Agenda de contas possui Lista | Calendário abaixo do mês. Metas e investimentos possui Metas | Investimentos abaixo do resumo acumulado. Os seletores preservam a escolha ao atualizar a tela.

@@ -114,3 +114,5 @@ As seções de Planejamento agora aparecem em barra horizontal deslizante: Agend
 Agenda de contas possui Lista | Calendário abaixo do mês. Metas e investimentos possui Metas | Investimentos abaixo do resumo acumulado. Os seletores preservam a escolha ao atualizar a tela.
 
 Agenda de contas mostra somente a lista, sem seletor de calendário. Metas e investimentos possui abas Metas | Investimentos com fundo claro e seleção branca, logo abaixo do título.
+
+Desativar Empréstimos no menu Você oculta a navegação, inclusão, vencimentos na agenda e lançamentos identificados como empréstimos nas listas. Contratos, pagamentos e histórico são preservados para reativação.

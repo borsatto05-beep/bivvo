@@ -112,3 +112,5 @@ Planejamento reúne Contas fixas e Assinaturas em Contas recorrentes, com filtro
 As seções de Planejamento agora aparecem em barra horizontal deslizante: Agenda de contas, Contas recorrentes, Orçamento, Metas e investimentos e Desafios. A agenda abre dentro de Planejamento e a barra continua disponível ao trocar de seção.
 
 Agenda de contas possui Lista | Calendário abaixo do mês. Metas e investimentos possui Metas | Investimentos abaixo do resumo acumulado. Os seletores preservam a escolha ao atualizar a tela.
+
+Agenda de contas mostra somente a lista, sem seletor de calendário. Metas e investimentos possui abas Metas | Investimentos com fundo claro e seleção branca, logo abaixo do título.

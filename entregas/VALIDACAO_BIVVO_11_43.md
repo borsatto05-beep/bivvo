@@ -4,7 +4,7 @@ Concluída em 7 de outubro de 2026, localmente, sem alterar serviços de produç
 
 | Verificação | Resultado |
 | --- | --- |
-| Suítes JavaScript | 29 passaram, 0 falharam |
+| Suítes JavaScript | 30 passaram, 0 falharam |
 | SEO estático | 55 URLs verificadas, 0 erros |
 | Sintaxe JavaScript | 95 arquivos verificados, 0 erros |
 | Build Netlify | Concluído; arquivos internos excluídos de dist |
@@ -34,3 +34,9 @@ Leitor alternativo jsQR validado em Chromium com `BarcodeDetector` desativado, u
 29 suítes JavaScript passaram. OCR Tesseract real executado em Chromium sob a CSP de produção contra comprovante sintético, sem Gemini, extraiu local, data e valor. Parser conservador recusa totais conflitantes, troco, datas inválidas e páginas de erro fiscal. QR testa regiões ampliadas antes de reduzir a foto e câmera automática aguarda identificação. Diagnósticos não registram conteúdo do documento. OCR local depende do download inicial do motor/modelo; não foi validado em iPhone físico nem medido contra as dez tentativas do usuário.
 
 Validação integrada: API simulada retornou 503 (leitura online indisponível), e `readReceipt` preencheu os três campos pelo motor Tesseract real no navegador. O teste não simulou o texto reconhecido.
+
+## Layout e recursos
+
+30 suítes JavaScript passaram. Novo teste de navegador validou cinco ações no menu móvel mesmo com empréstimos ativados; agenda com contas pendentes; favoritar sem criar lançamento; repetição apenas após confirmação; busca em outros meses sem acentos e por valor; atalhos de planejamento; personalização e remoção de favoritos; indicador offline e ausência de transbordamento horizontal a 390 px. A demonstração usada tem dados fictícios. Não houve alteração de dados reais nem publicação do site.
+
+Verificação visual adicional: sem transbordamento horizontal em larguras de 320, 390 e 1280 px.

@@ -1,6 +1,6 @@
 # BIVVO 11.43.0 — correções e implantação
 
-Validação local: 29 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
+Validação local: 30 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
 
 Esta versão corrige os pontos identificados na análise do ZIP 11.42.10. O pacote contém o código completo, os testes, o novo SQL e `dist/` já gerado. Nenhuma alteração foi aplicada ao Supabase ou ao site de produção durante esta revisão.
 
@@ -85,3 +85,11 @@ Consulta o QR fiscal internamente, sem abrir o navegador. Dados do portal oficia
 ## Campos vazios: leitura alternativa
 
 QR é decodificado antes de reduzir a foto, com ampliações de regiões quando necessário. Na câmera, o disparo automático espera identificar o QR; o botão manual continua disponível. Uma leitura de texto local Tesseract.js 6.0.1 trabalha em paralelo à API e preenche somente campos ausentes. No primeiro uso, baixa o motor e modelo de idioma por URLs fixas do jsDelivr; a foto não é enviada ao CDN. O modelo pode ficar no cache do navegador. A primeira leitura local precisa de conexão. Sem QR nem texto legível, o formulário fica aberto e mostra um aviso claro. Diagnósticos operacionais distinguem QR, consulta fiscal, API e OCR local, sem armazenar imagem ou texto extraído. Não há precisão comprovada de 90%/100%; condições reais continuam exigindo validação.
+
+## Layout e experiência de uso
+
+Início prioriza valor disponível, registrar gasto, próximas contas, favoritos, mês e semana. IA, check-in e detalhes secundários ficam em Mais recursos. Personalizar início permite escolher os cartões visíveis e restaurar o padrão; preferências ficam no perfil. Navegação móvel tem cinco ações fixas: Início, Movimentos, Adicionar, Cartões e Planejamento. Agenda e empréstimos ficam acessíveis por Planejamento; administração fica no menu Você para administradores. Assinatura Bivvo é separada do planejamento financeiro.
+
+Movimentações oferece busca em todos os meses por descrição, categoria, valor, forma de pagamento e data, inclusive sem acentos. Favoritar no detalhe de um gasto cria somente um modelo no perfil. Repetir abre Novo gasto com os dados preenchidos e a data de hoje; só Adicionar cria um novo lançamento. Remover favorito fica disponível no início. Categoria permanece visível, e pagamento, recorrência e observação ficam em Mais opções; compra no cartão e edição abrem essas opções.
+
+Agenda reúne contas e faturas pendentes do mês, com acesso aos detalhes e confirmação de pagamento existente. O resumo semanal usa os últimos sete dias: entradas recebidas e gastos pagos/compras no cartão, sem misturar saldo inicial, dinheiro guardado ou principal de empréstimo. O estado de sincronização aparece por texto no cabeçalho, distinguindo dados locais, pendência e nuvem.

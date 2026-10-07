@@ -18,3 +18,7 @@ Os endpoints de Supabase, Mercado Pago e Gemini nos testes usam respostas simula
 Antes de publicar, aplique `supabase-hardening-11-43.sql`, configure `MERCADOPAGO_WEBHOOK_SECRET` e siga `README-11.43.md`. As integrações reais, câmera Android/iOS, condições do provedor de IA e identificação do controlador da política de privacidade ainda exigem validação/configuração do operador.
 
 Atualização visual: botão flutuante Privacidade removido. Revisão de permissões permanece disponível no menu Você e na página de privacidade.
+
+## Scanner simplificado — 07/10/2026
+
+Removido aviso prévio de IA. API e confirmação usam somente local, data e valor. Testadas as sete combinações não vazias de extração parcial, datas inválidas, reembolso de cota em falha e fallback para modelo antigo. No navegador, testadas as oito combinações de campos: dados encontrados preservados e apenas campos faltantes visíveis para preencher. Provedor simulado; leitura real do comprovante do vídeo não foi validada contra Gemini.

@@ -16,3 +16,5 @@ Os novos testes reproduzem autenticação antiga com token renovado, ausência/f
 Os endpoints de Supabase, Mercado Pago e Gemini nos testes usam respostas simuladas. O SQL novo foi revisado, mas não executado contra o banco do usuário. Não houve exclusão de conta real, cobrança, envio de foto ao Gemini ou validação de precisão com fotos reais. O teste do avaliador usa exemplos sintéticos e não deve ser divulgado como taxa de acerto do scanner.
 
 Antes de publicar, aplique `supabase-hardening-11-43.sql`, configure `MERCADOPAGO_WEBHOOK_SECRET` e siga `README-11.43.md`. As integrações reais, câmera Android/iOS, condições do provedor de IA e identificação do controlador da política de privacidade ainda exigem validação/configuração do operador.
+
+Atualização visual: botão flutuante Privacidade removido. Revisão de permissões permanece disponível no menu Você e na página de privacidade.

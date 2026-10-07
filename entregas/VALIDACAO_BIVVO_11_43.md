@@ -4,7 +4,7 @@ Concluída em 7 de outubro de 2026, localmente, sem alterar serviços de produç
 
 | Verificação | Resultado |
 | --- | --- |
-| Suítes JavaScript | 28 passaram, 0 falharam |
+| Suítes JavaScript | 29 passaram, 0 falharam |
 | SEO estático | 55 URLs verificadas, 0 erros |
 | Sintaxe JavaScript | 95 arquivos verificados, 0 erros |
 | Build Netlify | Concluído; arquivos internos excluídos de dist |
@@ -28,3 +28,9 @@ Removido aviso prévio de IA. API e confirmação usam somente local, data e val
 Novo gasto substitui a tela de confirmação do scanner. Testadas oito combinações de campos preenchidos/ausentes, sem inventar data. QR v2 offline, QR online, HTML/XML fiscal, consulta com erro, redirecionamento para rede privada, prioridade do QR sobre resposta de IA e leitura sem chave Gemini foram testados com respostas simuladas. Consulta real à Fazenda e leitura real de fotos pelo Gemini não foram executadas neste ambiente.
 
 Leitor alternativo jsQR validado em Chromium com `BarcodeDetector` desativado, usando imagem QR sintética, inclusive com aplicativo offline. Não substitui teste em aparelho iOS real.
+
+## Falhas com campos vazios
+
+29 suítes JavaScript passaram. OCR Tesseract real executado em Chromium sob a CSP de produção contra comprovante sintético, sem Gemini, extraiu local, data e valor. Parser conservador recusa totais conflitantes, troco, datas inválidas e páginas de erro fiscal. QR testa regiões ampliadas antes de reduzir a foto e câmera automática aguarda identificação. Diagnósticos não registram conteúdo do documento. OCR local depende do download inicial do motor/modelo; não foi validado em iPhone físico nem medido contra as dez tentativas do usuário.
+
+Validação integrada: API simulada retornou 503 (leitura online indisponível), e `readReceipt` preencheu os três campos pelo motor Tesseract real no navegador. O teste não simulou o texto reconhecido.

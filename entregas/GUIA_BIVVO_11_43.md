@@ -1,6 +1,6 @@
 # BIVVO 11.43.0 — correções e implantação
 
-Validação local: 28 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
+Validação local: 29 suítes JavaScript, 55 URLs de SEO, 95 arquivos de sintaxe e testes no navegador passaram. Consulte `VALIDACAO-11.43.md`.
 
 Esta versão corrige os pontos identificados na análise do ZIP 11.42.10. O pacote contém o código completo, os testes, o novo SQL e `dist/` já gerado. Nenhuma alteração foi aplicada ao Supabase ou ao site de produção durante esta revisão.
 
@@ -81,3 +81,7 @@ Há exemplos **sintéticos** em `tests/fixtures/scan-labels-example.json` e `sca
 ## QR como prioridade
 
 Consulta o QR fiscal internamente, sem abrir o navegador. Dados do portal oficial têm prioridade, seguidos dos campos diretamente codificados no QR; a foto completa somente os campos ausentes. URLs, redirecionamentos, tamanho e tempo de consulta são limitados. QR NFC-e v2 offline pode conter valor e dia; no QR online normalmente esses dados e o nome dependem da consulta fiscal. Falha da Fazenda preserva os dados disponíveis. QR funciona sem chave Gemini; completar a foto requer `GEMINI_API_KEY`. Consulta completa de QR não consome leitura de IA. Nenhum QR é tratado como prova de pagamento; os dados permanecem editáveis no formulário normal.
+
+## Campos vazios: leitura alternativa
+
+QR é decodificado antes de reduzir a foto, com ampliações de regiões quando necessário. Na câmera, o disparo automático espera identificar o QR; o botão manual continua disponível. Uma leitura de texto local Tesseract.js 6.0.1 trabalha em paralelo à API e preenche somente campos ausentes. No primeiro uso, baixa o motor e modelo de idioma por URLs fixas do jsDelivr; a foto não é enviada ao CDN. O modelo pode ficar no cache do navegador. A primeira leitura local precisa de conexão. Sem QR nem texto legível, o formulário fica aberto e mostra um aviso claro. Diagnósticos operacionais distinguem QR, consulta fiscal, API e OCR local, sem armazenar imagem ou texto extraído. Não há precisão comprovada de 90%/100%; condições reais continuam exigindo validação.

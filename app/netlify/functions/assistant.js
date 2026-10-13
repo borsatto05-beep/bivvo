@@ -18,7 +18,7 @@ function modelsForTier(tier){
   if(tier===4)return strong([process.env.GEMINI_ASSISTANT_MODEL_SPECIALIST,'gemini-2.5-pro','gemini-2.5-flash',base]);
   if(tier===3)return strong([process.env.GEMINI_ASSISTANT_MODEL_ADVANCED,'gemini-2.5-flash',base]);
   if(tier===2)return strong([process.env.GEMINI_ASSISTANT_MODEL_CONTEXTUAL,'gemini-2.5-flash',base]);
-  return strong([process.env.GEMINI_ASSISTANT_MODEL_ESSENTIAL,'gemini-2.5-flash',base]);
+  return strong([process.env.GEMINI_ASSISTANT_MODEL_ESSENTIAL,base,'gemini-2.5-flash']);
 }
 async function generateWithTier({tier,systemPrompt,userPrompt}){
   const level=AI_LEVELS[tier]||AI_LEVELS[1]; let last='';
@@ -124,6 +124,6 @@ ESTILO:
     const generated=await generateWithTier({tier:aiTier,systemPrompt,userPrompt});
     const j=generated.json, answer=(j.candidates||[]).flatMap(c=>c.content?.parts||[]).map(p=>p.text||'').join('').trim();
     if(!answer||!verifyNumbers(answer,tools)){await refund();return out(200,{title:'Bivvo IA',answer:'Não consegui validar todos os valores dessa resposta com segurança. Tente perguntar sobre seu saldo livre, mês, previsão, reserva, dívidas ou próximos passos.',verified:false,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used:Math.max(0,used-1),limit}})}
-    return out(200,{title:'Bivvo IA',answer,verified:true,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used,limit}});
+    return out(200,{title:'Bivvo IA',answer,provider:'gemini',model:generated.model,verified:true,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used,limit}});
   }catch(e){console.error('assistant',e.message);await refund();return out(502,{error:'O Bivvo IA não conseguiu concluir a análise agora. Tente novamente.'})}
 };

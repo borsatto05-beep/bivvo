@@ -1,0 +1,11 @@
+node_modules/
+.venv/
+dist/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+
+# Gerado a partir das partes verificadas durante o build.
+/downloads/Bivvo-Controle-Financeiro.apk

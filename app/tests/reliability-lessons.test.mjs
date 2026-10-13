@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+globalThis.window={addEventListener(){}};
+const {lessonFinancialValues}=await import('../js/views/life-education.js');
+import {monthSummary,computeFresh} from '../js/finance.js';
+import {emptyState} from '../js/store.js';
+import {today,ymOf} from '../js/util.js';
+const s=emptyState(),date=today();
+s.transactions=[{id:'in',date,type:'income',value:2000,status:'Pago',method:'PIX'}, {id:'out',date,type:'expense',value:275.45,status:'Pago',method:'Débito',cat:'Mercado'}];
+const actual=computeFresh(()=>monthSummary(ymOf(date),s)),v=lessonFinancialValues(actual,{perDay:40,free:800});
+assert.equal(v.expense,275.45);assert.equal(v.expensePaid,275.45);assert.equal(v.incomePaid,2000);assert.equal(v.balance,1724.55);
+const forecast=lessonFinancialValues({income:3000,incomePaid:1000,spend:450,spendPaid:200,planned:550});
+assert.equal(forecast.expense,450);assert.equal(forecast.expensePaid,200);assert.equal(forecast.planned,550);assert.equal(forecast.balance,2000);
+assert.equal(lessonFinancialValues().expense,0);
+console.log('Aulas usam gastos reais do motor, distinguindo pago e agendado.');

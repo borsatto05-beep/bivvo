@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const plans=fs.readFileSync('js/plans.js','utf8');
+const server=fs.readFileSync('netlify/lib/plans.js','utf8');
+const quick=fs.readFileSync('js/quickcapture.js','utf8');
+const couple=fs.readFileSync('js/views/family.js','utf8');
+const company=fs.readFileSync('js/views/company-home.js','utf8');
+const paywall=fs.readFileSync('js/views/pro.js','utf8');
+const landing=fs.readFileSync('index.html','utf8');
+const toml=fs.readFileSync('netlify.toml','utf8');
+const fn=fs.readFileSync('netlify/functions/quick-capture-usage.js','utf8');
+
+assert(plans.includes('scansPerMonth: 5, quickCapturePerMonth: 10'),'Grátis deve ter 5 scans e 10 anotações rápidas');
+assert(plans.includes('quickCapturePerMonth: Infinity'),'planos pagos liberam texto/voz sem a trava mensal');
+assert(server.includes('free:{scan:5,quick:10'),'servidor deve aplicar os mesmos limites');
+assert(server.includes('quick:Infinity'),'planos pagos devem ser ilimitados no servidor');
+assert(quick.includes("fetch('/api/quick-capture-usage'"),'captura rápida deve validar cota no servidor');
+assert(quick.includes('export function captureBar(options={}'), 'barra precisa aceitar contexto por perfil');
+assert(quick.includes('onResult'), 'scanner deve poder devolver leitura ao perfil atual');
+assert(couple.includes('captureBar(coupleCaptureOptions'), 'Casal deve ter captura rápida própria');
+assert(couple.includes("draftKey:'couple'"),'Casal deve manter rascunho separado');
+assert(couple.includes("family.shareTransaction"),'captura do casal deve salvar no espaço compartilhado');
+assert(company.includes("draftKey:'company'"),'Empresa deve ter captura rápida contextual');
+assert(company.includes('captureBar({draftKey:\'company\''),'Empresa deve renderizar a barra');
+assert(paywall.includes("quick:u=>"),'limite grátis precisa abrir paywall explicativo');
+assert(toml.includes('/api/quick-capture-usage'),'rota da cota deve existir');
+assert(fn.includes("p_feature:feature")&&fn.includes("feature='quick_capture'"),'uso deve ser atômico no usage_counters');
+assert(landing.includes('10 anotações rápidas por texto/voz por mês'));
+assert(landing.includes('<tr><td>Scanner / mês</td><td>5</td>'));
+console.log('Bivvo 11.55: captura por texto/voz/câmera está contextualizada em Pessoal, Casal e Empresa, com limite no Grátis.');

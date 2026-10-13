@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {captureReferralCode,signupUrl,registrationMetadata} from '../js/acquisition.js';
+import {buildShareUrl} from '../js/growth-utils.mjs';
+const data=new Map(),storage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};
+const origin='https://maisbivvo.netlify.app';
+assert.equal(captureReferralCode(origin+'/quanto-posso-gastar-hoje/?ref=abcdef12',storage),'abcdef12');
+for(const ref of ['invalid','123','<script>','ABCDEF12'])assert.equal(captureReferralCode(origin+'/?ref='+encodeURIComponent(ref),storage),null);
+assert.equal(storage.getItem('bivvo_ref'),'abcdef12','invalid codes cannot overwrite a valid indication');
+const u=new URL(signupUrl(origin+'/ferramentas/?utm_source=instagram&utm_campaign=reel&salary=9876.54&email=private@example.com',origin,storage));
+assert.equal(u.searchParams.get('ref'),'abcdef12');assert.equal(u.searchParams.get('utm_source'),'instagram');assert.equal(u.searchParams.get('signup'),'1');
+assert(!u.searchParams.has('salary'));assert(!u.searchParams.has('email'));
+assert.deepEqual(registrationMetadata('','','abcdef12'),{full_name:'',phone:'',referred_by:'abcdef12'});
+assert.throws(()=>registrationMetadata('Ana','123','abcdef12'),/telefone/);
+assert(!('referred_by' in registrationMetadata('Ana','','invalid')));
+const share=new URL(buildShareUrl(origin+'/x?email=private@example.com&salary=9876.54&name=Ana&token=secret#private','copy_link'));
+assert.deepEqual([...share.searchParams.keys()],['utm_source','utm_medium','utm_campaign','utm_content']);assert.equal(share.hash,'');
+console.log('Aquisição: indicação válida persistida, cadastro opcional e URLs sem dados financeiros/pessoais.');

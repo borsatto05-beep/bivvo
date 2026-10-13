@@ -1,0 +1,14 @@
+{
+  "appId": "com.maisbivvo.app",
+  "appName": "Bivvo",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#14071F",
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {mergePayload} from '../js/sync-merge.js';
+const wrap=products=>({financialProfiles:{company:{companyProducts:products}}});
+const base=wrap([{id:'a',name:'Arroz',salePrice:10,stockQty:5}]);
+const remote=wrap([{...base.financialProfiles.company.companyProducts[0],stockQty:8},{id:'remote',name:'Leite'}]);
+const local=wrap([{...base.financialProfiles.company.companyProducts[0],salePrice:12},{id:'local',name:'Café'}]);
+const merged=mergePayload(remote,local,new Set(),base).financialProfiles.company;
+assert.deepEqual(new Set(merged.companyProducts.map(x=>x.id)),new Set(['a','remote','local']));
+assert.equal(merged.companyProducts.find(x=>x.id==='a').stockQty,8);
+assert.equal(merged.companyProducts.find(x=>x.id==='a').salePrice,12);
+const deleted=mergePayload(wrap([]),local,new Set(),base).financialProfiles.company;
+assert(!deleted.companyProducts.some(x=>x.id==='a'));assert(deleted.deletedRecords.a);
+const resurrected=mergePayload(wrap([{id:'a',salePrice:99}]),{financialProfiles:{company:deleted}},new Set(),base).financialProfiles.company;
+assert(!resurrected.companyProducts.some(x=>x.id==='a'));
+console.log('Produtos: inclusões concorrentes, alterações independentes e exclusão sem ressurreição.');

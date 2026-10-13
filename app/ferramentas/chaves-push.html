@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bivvo · gerar chaves dos avisos</title>
+<link rel="stylesheet" href="chaves-push.css">
+<script src="chaves-push.js" defer></script>
+<link rel="stylesheet" href="/privacy.css?v=11.43.0">
+<script defer src="/js/privacy.js?v=11.43.0"></script>
+</head>
+<body>
+<main>
+  <h1>Chaves dos avisos (VAPID)</h1>
+  <p>As chaves são geradas aqui no seu navegador e não são enviadas a lugar nenhum. Faça isso uma única vez.</p>
+  <button id="gen" type="button">Gerar chaves</button>
+  <div id="out" hidden>
+    <label>VAPID_PUBLIC_KEY<textarea id="pub" readonly rows="3"></textarea></label>
+    <label>VAPID_PRIVATE_KEY <small>(secreta: só no Netlify)</small><textarea id="priv" readonly rows="2"></textarea></label>
+    <p>No Netlify: Site configuration → Environment variables. Crie as duas variáveis acima e também <b>VAPID_SUBJECT</b> com <code>mailto:seu-email</code>. Depois faça um novo deploy.</p>
+    <p><b>Não troque as chaves depois</b>: quem já ativou os avisos precisaria ativar de novo.</p>
+  </div>
+</main>
+</body>
+</html>

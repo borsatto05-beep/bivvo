@@ -1,0 +1,7 @@
+body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#F4F3F7;color:#1E1B24}
+main{max-width:620px;margin:0 auto;padding:32px 20px}
+h1{font-size:1.5rem;margin:0 0 8px}
+button{font:inherit;font-weight:700;color:#fff;background:linear-gradient(120deg,#7B22C9,#C8177F);border:0;border-radius:14px;padding:12px 18px;cursor:pointer}
+label{display:grid;gap:6px;margin:18px 0;font-weight:700}
+textarea{font:13px/1.4 ui-monospace,monospace;padding:10px;border:1px solid #E8E5EE;border-radius:12px;resize:vertical;word-break:break-all}
+small{font-weight:400;color:#6B6675}

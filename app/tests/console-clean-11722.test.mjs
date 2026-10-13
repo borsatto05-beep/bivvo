@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const build=fs.readFileSync('scripts/build.mjs','utf8');
+const ads=fs.readFileSync('js/google-ads.js','utf8');
+const csp=fs.readFileSync('netlify.toml','utf8');
+assert(build.includes("p.startsWith('js/')"));
+assert(!build.includes("paths.filter(p=>/\\.(html|css|js|woff2?|png|svg|ico|webmanifest)$/.test(p))"));
+assert(ads.includes('function start(loadTag=false)'));
+assert(ads.includes('start(true);seen.add(key)'));
+assert(csp.includes('https://ad.doubleclick.net'));
+assert(csp.includes("frame-src 'self'"));
+assert(!/script-src [^;]*'unsafe-inline'/.test(csp));
+console.log('PASS: precache restrito ao app, Google Ads lazy e CSP sem unsafe-inline.');

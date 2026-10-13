@@ -1,0 +1,34 @@
+# Bivvo
+
+Bivvo é um aplicativo de organização financeira pessoal em português do Brasil. A proposta é ajudar pessoas a sair do aperto financeiro e avançar de descontrole e sobrevivência para controle, estabilidade e crescimento.
+
+## Guias principais
+- https://maisbivvo.netlify.app/sair-do-aperto/ — hub para sair do aperto financeiro
+- https://maisbivvo.netlify.app/dinheiro-nao-da-para-pagar-tudo/ — o que fazer quando o dinheiro não paga tudo
+- https://maisbivvo.netlify.app/como-organizar-salario-que-nao-da/ — organizar salário curto
+- https://maisbivvo.netlify.app/como-sair-das-dividas-ganhando-pouco/ — sair das dívidas ganhando pouco
+- https://maisbivvo.netlify.app/aprenda/ — central de educação financeira
+- https://maisbivvo.netlify.app/calculadoras/ate-o-proximo-salario/ — referência até o próximo salário
+
+## Produto
+- https://maisbivvo.netlify.app/app-controle-financeiro/ — aplicativo de controle financeiro
+- https://maisbivvo.netlify.app/quanto-posso-gastar-hoje/ — visão de quanto pode gastar hoje
+
+Conteúdo educativo; não substitui aconselhamento financeiro profissional.
+
+## Ferramentas gratuitas de aquisição
+- /calculadora-salario-liquido/ — estimativa de salário líquido 2026, com fontes oficiais de INSS e Receita Federal.
+- /planilha-de-gastos-mensais/ — modelo gratuito em Excel para registrar e resumir gastos mensais.
+- /calculadora-de-ferias/ — estimativa simples do valor bruto de férias e adicional de 1/3.
+
+## Princípio editorial
+O Bivvo prioriza respostas diretas, ferramentas utilizáveis, exemplos claros e fontes oficiais quando cálculos dependem de regras públicas. Não promete resultado financeiro garantido.
+
+## Central de ferramentas e recursos
+- https://maisbivvo.netlify.app/ferramentas/ — catálogo de calculadoras, simuladores, planilhas e diagnósticos gratuitos.
+- https://maisbivvo.netlify.app/ferramentas/incorporar/ — ferramentas que podem ser incorporadas em sites externos por iframe seguro.
+- https://maisbivvo.netlify.app/recursos/ — ativos públicos para referência, citação e uso educativo.
+- https://maisbivvo.netlify.app/imprensa/ — descrição oficial, posicionamento e recursos para criadores/imprensa.
+
+## Distribuição e privacidade
+Links compartilhados usam UTM para atribuição de canal, sem incluir salário, dívida, saldo, despesa ou resultado financeiro na URL. Cartões compartilháveis evitam valores pessoais e priorizam contexto categórico.

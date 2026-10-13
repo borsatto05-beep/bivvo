@@ -1,0 +1,34 @@
+{
+  "name": "bivvo",
+  "version": "11.84.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "test:seo": "python tests/static-seo-1142.py",
+    "build": "node scripts/build.mjs",
+    "evaluate:scan": "node scripts/evaluate-scan.mjs",
+    "test:browser": "node tests/browser-hardening.cjs",
+    "serve": "python scripts/serve.py",
+    "cap:sync": "npm run build && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "android:assets": "npx @capacitor/assets generate --android --iconBackgroundColor #14071F --iconBackgroundColorDark #14071F --splashBackgroundColor #14071F --splashBackgroundColorDark #14071F",
+    "android:patch": "node scripts/patch-android.mjs",
+    "android:prepare": "npm run build && npx cap sync android && npm run android:patch",
+    "android:open": "npm run android:prepare && npx cap open android",
+    "test:growth": "node tests/growth-browser-1184.cjs",
+    "test:modules": "node scripts/verify-dist.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "@capacitor/cli": "8.5.3",
+    "@capacitor/assets": "3.0.5"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  }
+}

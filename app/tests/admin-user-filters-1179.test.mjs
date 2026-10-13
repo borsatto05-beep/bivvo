@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const src=fs.readFileSync(new URL('../js/views/admin.js',import.meta.url),'utf8');
+for (const token of ["'Status'","'Origem'","'Aba mais usada'","'Dispositivo'","'Sistema'",'Limpar filtros','Mostrando ${num(rows.length)} de ${num(rowsAll.length)} usuário(s)']) assert.ok(src.includes(token),`faltando ${token}`);
+assert.ok(src.includes("status==='online'"));
+assert.ok(src.includes("status==='offline'"));
+assert.ok(src.includes("origin!=='all'"));
+assert.ok(src.includes("route!=='all'"));
+assert.ok(src.includes("device!=='all'"));
+assert.ok(src.includes("os!=='all'"));
+console.log('admin-user-filters-1179 ok');

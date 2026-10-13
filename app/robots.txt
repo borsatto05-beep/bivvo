@@ -1,0 +1,17 @@
+# Bivvo — robots.txt (Fase 8.15)
+# Conteúdo público (início, Aprenda, calculadoras e páginas SEO) liberado para indexação.
+# APIs e funções do servidor não têm conteúdo para buscadores.
+# Áreas privadas do app (login, painel, Admin) ficam em rotas com # e não são rastreadas;
+# páginas internas usam noindex (meta ou cabeçalho X-Robots-Tag), não Disallow,
+# para que o buscador consiga ler a instrução de não indexar.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /.netlify/
+
+Sitemap: https://maisbivvo.netlify.app/sitemap.xml
+
+# ChatGPT Search: permitir descoberta e citação em resultados de busca.
+User-agent: OAI-SearchBot
+Allow: /
+

@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const cards=fs.readFileSync('js/views/cards.js','utf8');
+const forms=fs.readFileSync('js/views/forms.js','utf8');
+assert.match(cards,/Pagar antecipadamente/,'fatura aberta deve oferecer pagamento antecipado');
+assert.match(cards,/Antecipar esta fatura/,'fatura futura deve oferecer antecipação');
+assert.match(cards,/payInvoice\(card, inv, \{ early:/,'cards deve informar quando pagamento é antecipado');
+assert.match(forms,/transactionRole:\s*'card_payment'/,'pagamento deve criar saída de caixa própria');
+assert.match(forms,/cardPaidAmount/,'pagamento deve dar baixa na fatura');
+assert.match(forms,/Você pode pagar o valor total ou apenas uma parte/,'pagamento total ou parcial deve ser suportado');
+assert.match(forms,/Saldo atualizado e limite liberado/,'usuário deve receber confirmação clara');
+console.log('card early payment 11.64 ok');

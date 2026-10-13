@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const cop=fs.readFileSync(new URL('../js/copilot.js',import.meta.url),'utf8');
+const view=fs.readFileSync(new URL('../js/views/copilot.js',import.meta.url),'utf8');
+const ai=fs.readFileSync(new URL('../js/views/assistant.js',import.meta.url),'utf8');
+assert.match(cop,/export function todayBrief/);
+assert.match(cop,/export function whatIfIncomeDrop/);
+assert.match(view,/export function openWhatIf/);
+assert.match(view,/Central E se\?/);
+assert.match(view,/AÇÕES RÁPIDAS/);
+assert.match(ai,/source:'purchase'/);
+assert.match(ai,/source:'whatif'/);
+console.log('7 testes Bloco F: OK');

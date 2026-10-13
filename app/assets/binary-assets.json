@@ -1,0 +1,26 @@
+{
+  "files": [
+    {
+      "path": "downloads/Bivvo-Controle-Financeiro.apk",
+      "bytes": 21087857,
+      "sha256": "2648e63f46511722554d9322b152218149146fe35cfe6cfc46ba36d85f24b77f",
+      "parts": [
+        {
+          "path": "downloads/apk-parts/Bivvo-Controle-Financeiro.apk.part1",
+          "bytes": 8388608,
+          "sha256": "95984c3b5ba422446ac9a8970870820690800d86692d02fe9a201ebbff381997"
+        },
+        {
+          "path": "downloads/apk-parts/Bivvo-Controle-Financeiro.apk.part2",
+          "bytes": 8388608,
+          "sha256": "16b4fedd2ef470226b34dfe5d7a734885906716e70f8ad59895f91f473d863d9"
+        },
+        {
+          "path": "downloads/apk-parts/Bivvo-Controle-Financeiro.apk.part3",
+          "bytes": 4310641,
+          "sha256": "c12bf4fd54afdbe137104e9700da25536c10a84a1d53d6c42d594669835aefd5"
+        }
+      ]
+    }
+  ]
+}

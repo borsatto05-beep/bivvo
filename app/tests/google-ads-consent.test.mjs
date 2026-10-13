@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+const source=fs.readFileSync('js/google-ads.js','utf8');
+function run(src=source){let permitted=false,listener;const scripts=[];const window={bivvoPrivacy:{marketingAllowed:()=>permitted,onChange:fn=>listener=fn}};vm.runInNewContext(src,{window,document:{createElement:()=>({}),head:{append:s=>scripts.push(s)}},crypto:{randomUUID:()=> 'random-transaction'},Date});return {window,scripts,choose(v){permitted=v;listener(v);}};}
+let r=run();assert.equal(r.scripts.length,0);assert.equal(r.window.bivvoGoogleAds.registration('private-account-id'),false);r.choose(false);assert.equal(r.scripts.length,0);r.choose(true);assert.equal(r.scripts.length,0);r.choose(true);assert.equal(r.scripts.length,0);assert(!r.window.dataLayer.some(a=>a[0]==='event'));
+assert.equal(r.window.bivvoGoogleAds.registration('private-account-id'),true);assert.equal(r.scripts.length,1);assert.match(r.scripts[0].src,/AW-18502157854/);assert.equal(r.window.bivvoGoogleAds.registration('private-account-id'),false);r.choose(false);assert.equal(r.window.bivvoGoogleAds.registration('id2'),false);
+const events=r.window.dataLayer.filter(a=>a[0]==='event');assert.equal(events.length,1);const event=events[0];assert.equal(event[2].send_to,'AW-18502157854/QTYvCJ7J7ZUdEJ6MwvZE');assert.equal(event[2].value,1);assert.equal(event[2].currency,'BRL');assert.equal(event[2].transaction_id,'random-transaction');assert(!JSON.stringify(event).includes('private-account-id'));assert.equal(r.window.dataLayer.at(-1)[2].ad_storage,'denied');
+r=run(source.replace("SIGNUP_CONVERSION_LABEL='QTYvCJ7J7ZUdEJ6MwvZE'","SIGNUP_CONVERSION_LABEL=''"));r.choose(true);assert.equal(r.window.bivvoGoogleAds.registration('id'),false);assert(!r.window.dataLayer.some(a=>a[0]==='event'));
+// O evento é ligado à resposta aceita de signUp, e não ao carregamento da página.
+const main=fs.readFileSync('js/main.js','utf8');assert.match(main,/if\(isNewRegistration\)\{try\{window\.bivvoGoogleAds\?\.registration\(data\.user\.id\)/);
+const predicate=main.match(/const isNewRegistration = (.*);/)[1];
+for(const [data,expected] of [[null,false],[{user:null},false],[{user:{id:'old',identities:[]}},false],[{user:{id:'new',identities:[{}]}},true]])assert.equal(vm.runInNewContext(predicate,{data}),expected);
+console.log('Google Ads: inscrição aceita, destino correto, valor/moeda, consentimento, revogação e deduplicação sem dados pessoais.');

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const view=fs.readFileSync('js/views/family.js','utf8');
+const client=fs.readFileSync('js/family.js','utf8');
+const api=fs.readFileSync('netlify/functions/family.js','utf8');
+const sql=fs.readFileSync('supabase-couple-shopping-11-56.sql','utf8');
+assert(view.includes('buildCoupleDemo()'),'Casal precisa ter dados de demonstração próprios');
+assert(view.includes("if (ctx.demo) {\n    if (coupleMode)"),'demonstração deve abrir o Casal sem bloquear a página');
+assert(view.includes('Ana & Caio')&&view.includes("shop('Arroz 5 kg'")&&view.includes("shop('Leite'"),'demo do Casal deve trazer casal e lista preenchida');
+assert(view.includes("h('h3','Compras de vocês')"),'painel do Casal deve renderizar lista de compras');
+assert(view.includes('Faltam comprar')&&view.includes('Já comprados'),'lista deve mostrar resumo de pendentes e comprados');
+assert(view.includes('openShoppingItem')&&view.includes('toggleShoppingItem')&&view.includes('clearPurchasedShopping'),'lista precisa permitir criar, marcar e limpar itens');
+assert(client.includes("call('shopping_add'")&&client.includes("call('shopping_toggle'")&&client.includes("call('shopping_update'")&&client.includes("call('shopping_delete'"),'cliente precisa sincronizar operações da lista');
+assert(api.includes("action==='shopping_add'")&&api.includes("action==='shopping_toggle'")&&api.includes('family_shopping_items'),'API precisa persistir a lista do casal');
+assert(sql.includes('create table if not exists public.family_shopping_items'),'migração da lista compartilhada deve existir');
+assert(sql.includes('enable row level security'),'nova tabela deve manter RLS ativo');
+console.log('Bivvo 11.56: demonstração do Casal e lista de compras compartilhada validadas.');

@@ -1,0 +1,13 @@
+import { survivalPlan } from '../js/copilot.js';
+import * as store from '../js/store.js';
+let pass=0,fail=0; const ok=(n,v)=>{if(v){console.log('  ✓ '+n);pass++;}else{console.error('  ✗ '+n);fail++;}};
+const s=store.getState();
+const r=survivalPlan(s);
+ok('plano retorna próxima referência', !!r.next?.date);
+ok('limite diário nunca é negativo', r.daily>=0);
+ok('dinheiro protegido reconcilia compromissos', Math.abs(r.protectedMoney.protected-(r.protectedMoney.bills+r.protectedMoney.cards+r.protectedMoney.safety))<0.011);
+ok('livre do plano usa o spendable central', Math.abs(r.free-r.protectedMoney.free)<0.011);
+ok('forecast do plano usa horizonte de 45 dias', r.forecast?.days===45);
+ok('risco ausente implica déficit zero', r.risk || r.deficit===0);
+ok('plano informa se forecast tem componente estimado', typeof r.estimated==='boolean');
+console.log(`\n${pass} passaram, ${fail} falharam`); if(fail) process.exit(1);

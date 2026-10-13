@@ -1,0 +1,5 @@
+(function(){
+ const copy={expenses:['Organizar meus gastos','Entenda para onde seu dinheiro vai e dê um papel a cada escolha.'],cards:['Entender meus cartões','Veja a parcela de hoje e o compromisso dos próximos meses.'],debt:['Organizar minhas dívidas','Entenda prazo e custo total antes de escolher seu próximo passo.'],reserve:['Começar minha reserva','Explore uma meta de proteção que faça sentido para sua realidade.']};
+ function init(){document.querySelectorAll('[data-orbit-intent]').forEach(button=>button.addEventListener('click',()=>{const goal=button.dataset.orbitIntent;if(!copy[goal])return;document.querySelectorAll('[data-orbit-intent]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));document.querySelector('#orbitPreviewTitle').textContent=copy[goal][0];document.querySelector('#orbitPreviewText').textContent=copy[goal][1];try{sessionStorage.setItem('bivvo_learning_intent_v1',goal);}catch{}}));}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();

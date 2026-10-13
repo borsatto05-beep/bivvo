@@ -1,0 +1,13 @@
+import { recoveryAnalysis } from '../js/copilot.js';
+import * as store from '../js/store.js';
+let pass=0,fail=0; const ok=(n,v)=>{if(v){console.log('  ✓ '+n);pass++;}else{console.error('  ✗ '+n);fail++;}};
+const before=JSON.stringify(store.getState());
+const r=recoveryAnalysis();
+ok('missão tem seis etapas', r.steps.length===6 && r.total===6);
+ok('progresso fica entre 0 e 100', r.progress>=0 && r.progress<=100);
+ok('estratégias de dívida são listas', Array.isArray(r.debts.smallest)&&Array.isArray(r.debts.lowerImpact));
+ok('não inventa juros', r.debts.rows.every(x=>x.interestKnown===false && x.interestRate===null));
+ok('reserva nunca fica negativa', recoveryAnalysis(undefined,999999999).reserve.after>=0);
+ok('simulação reduz ou mantém cobertura', recoveryAnalysis(undefined,100).reserve.monthsAfter<=r.reserve.monthsBefore);
+ok('simulação não altera estado', JSON.stringify(store.getState())===before);
+console.log(`\n${pass} passaram, ${fail} falharam`); if(fail) process.exit(1);

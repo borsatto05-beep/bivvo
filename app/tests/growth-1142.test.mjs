@@ -1,0 +1,15 @@
+import { buildShareUrl, safeEmbedTool, buildEmbedUrl, classifyReferral, budgetStatusFromPercent, safeSlug } from '../js/growth-utils.mjs';
+let pass=0,fail=0;const ok=(c,n,x='')=>{if(c){pass++;console.log('  ✓',n)}else{fail++;console.log('  ✗',n,x)}};
+const u=new URL(buildShareUrl('https://maisbivvo.netlify.app/planilha-de-gastos-mensais/?salary=3200&debt=900','whatsapp','planilha gastos'));
+ok(u.searchParams.get('utm_source')==='whatsapp'&&u.searchParams.get('utm_medium')==='share'&&u.searchParams.get('utm_campaign')==='organic_share','UTM de WhatsApp');
+ok(!u.searchParams.has('salary')&&!u.searchParams.has('debt'),'remove parâmetros financeiros sensíveis');
+ok(u.searchParams.get('utm_content')==='planilha_gastos','utm_content sanitizado');
+let threw=false;try{buildShareUrl('https://evil.example/x','whatsapp','x')}catch{threw=true}ok(threw,'não gera link compartilhável para origem externa');
+ok(safeEmbedTool('parcelas')==='parcelas'&&safeEmbedTool('qualquer-coisa')==='comprometimento','embed usa allowlist');
+ok(buildEmbedUrl('reserva').endsWith('?tool=reserva'),'URL de embed usa só tool permitido');
+ok(classifyReferral('https://maisbivvo.netlify.app/x?utm_source=whatsapp&utm_medium=share','').channel==='share','classifica visita compartilhada');
+ok(classifyReferral('https://maisbivvo.netlify.app/x','https://chatgpt.com/c/abc').source==='chatgpt','classifica ChatGPT por referrer');
+ok(classifyReferral('https://maisbivvo.netlify.app/x','https://www.google.com/search?q=x').source==='google','classifica Google por referrer');
+ok(budgetStatusFromPercent(94)==='prioridade no essencial'&&budgetStatusFromPercent(45)==='margem mais folgada','status do orçamento é categórico');
+ok(safeSlug('Salário Líquido 2026')==='salario_liquido_2026','slug remove acentos e caracteres');
+console.log(`\n${pass} passaram, ${fail} falharam`);process.exit(fail?1:0);

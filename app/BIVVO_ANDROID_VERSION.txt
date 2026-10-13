@@ -1,0 +1,4 @@
+BIVVO 11.76 — PREPARAÇÃO CAPACITOR ANDROID
+Base funcional: BIVVO 11.75
+Application ID proposto: com.maisbivvo.app
+Capacitor: 8.5.3

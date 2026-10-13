@@ -4,7 +4,7 @@ import { canUseFeature, getAiLevel } from '../plans.js';
 import { openPaywall } from './pro.js';
 import { toast } from '../ui.js';
 import { track } from '../analytics.js';
-import { toolResults, rayX, askAI, aiUsage, suggestedQuestions } from '../assistant.js?v=11.85.0-gemini-fix2';
+import { toolResults, localAnswer, elaborateLocalAnswer, rayX, askAI, aiUsage, suggestedQuestions } from '../assistant.js?v=11.85.0-gemini-fix2';
 
 const CONSENT='bivvo_ai_consent_gemini_v2', CRISIS_CTX='bivvo_recovery_crisis_context_v1';
 function hasConsent(){ try{return localStorage.getItem(CONSENT)==='1';}catch{return false;} }
@@ -34,17 +34,20 @@ export function renderAssistant(root) {
   add('bot',crisis?'Plano de recuperação':'Bivvo IA',welcome(tools,crisis));
   const run=async q=>{
     q=String(q||'').trim(); if(!q||send.disabled)return; add('me',null,q); input.value='';
+    const currentTools=toolResults();
+    const local=localAnswer(q,currentTools);
+    if(local){const analysis=elaborateLocalAnswer(local,currentTools);add('bot','Análise interna · '+analysis.title,analysis.text);track('assistant_used',{source:'local',stage:currentTools.direction?.stage});return;}
     if(!hasConsent()){
       const ok=confirm('Para responder esta pergunta, o Bivvo enviará somente números agregados e resultados calculados (como saldo livre, previsão, reserva e estágio financeiro) ao Google Gemini, junto com sua pergunta. Descrições do extrato, nomes de compras e o extrato bruto não são enviados. Continuar?');
       if(!ok){add('bot','Privacidade','Tudo bem. Você pode continuar consultando os cálculos do app sem enviar perguntas ao Gemini.');return;} consent();
     }
     send.disabled=true; send.textContent='Pensando…';
-    try{ const r=await askAI(q,tools); add('bot',r.provider==='gemini'?'Bivvo IA · Gemini':r.title||'Aviso do Bivvo',r.answer); track('assistant_used',{source:'ai',stage:tools.direction?.stage,verified:r.verified!==false}); }
+    try{ const r=await askAI(q,currentTools); add('bot',r.provider==='gemini'?'Bivvo IA · Gemini':r.title||'Aviso do Bivvo',r.answer); track('assistant_used',{source:'ai',stage:tools.direction?.stage,verified:r.verified!==false}); }
     catch(e){ if(e.code==='quota') openPaywall({feature:'assistant',usage:e.usage,onUnlocked:()=>{root.innerHTML='';renderAssistant(root);}}); else toast(e.message); add('bot','Não consegui responder',e.message); }
     finally{send.disabled=false;send.textContent='Perguntar';}
   };
   send.onclick=()=>run(input.value); input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();run(input.value);}});
-  const quick=suggestedQuestions(tools);
+  const quick=['Crie meu planejamento completo passo a passo',...suggestedQuestions(tools)];
   root.append(h('section.card.ai-ray', h('div.card-head',h('h3','Raio-X financeiro'),h('span.muted.sm',tools.direction?.stageLabel||'Agora')), h('div.ai-ray-list',rayX(tools).map(x=>h('p',x)))));
-  root.append(h('section.card.ai-box', chat, h('div.ai-quick',quick.map(q=>h('button.chip',{type:'button',onclick:()=>run(q)},q))), h('div.ai-compose',input,send), h('p.hint',`Perguntas ao Gemini: ${usage.remaining === Infinity ? 'sem limite' : usage.remaining+' restantes neste mês'}. As perguntas rápidas também consultam o Gemini e usam a cota.`)));
+  root.append(h('section.card.ai-box', chat, h('div.ai-quick',quick.map(q=>h('button.chip',{type:'button',onclick:()=>run(q)},q))), h('div.ai-compose',input,send), h('p.hint',`Perguntas ao Gemini: ${usage.remaining === Infinity ? 'sem limite' : usage.remaining+' restantes neste mês'}. Análises internas são feitas no aparelho e não gastam cota do Gemini.`)));
 }

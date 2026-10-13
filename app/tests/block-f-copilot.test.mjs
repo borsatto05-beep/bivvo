@@ -8,6 +8,6 @@ assert.match(cop,/export function whatIfIncomeDrop/);
 assert.match(view,/export function openWhatIf/);
 assert.match(view,/Central E se\?/);
 assert.match(view,/AÇÕES RÁPIDAS/);
-assert.match(ai,/await askAI\(q,tools\)/);
+assert.match(ai,/await askAI\(q,currentTools\)/);
 assert.doesNotMatch(ai,/source:'whatif'/);
 console.log('7 testes Bloco F: OK');

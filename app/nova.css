@@ -31,3 +31,5 @@ html[data-theme=dark] :is(.life-page-tutor-copy b,.company-stage-intro h2,.finan
 body.in-app[data-finance-profile]{--bg:inherit;--surface:inherit;--sunk:inherit;--line:inherit;--plum:inherit;--magenta:inherit;--blush:inherit;--lilac:inherit;--pos:inherit;--grad:inherit;background:var(--bg)}
 body.in-app[data-finance-profile] .topbar{background:var(--glass)}
 html[data-theme=dark] :is(.couple-hero,.couple-hero-balance,.couple-kpi.good,.couple-kpi.warn,.couple-privacy,.couple-invite-callout,.couple-split-advice>div,.company-kpi.warn,.company-kpi.bad,.family-head){background:var(--surface);color:var(--ink);border-color:var(--line)}
+/* Resumo financeiro: valores sobre o próprio cartão, sem blocos de fundo. */
+.month .stat,.recovery-money>div{background:transparent;box-shadow:none}

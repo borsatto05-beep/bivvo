@@ -33,7 +33,7 @@ export function toolResults(s = store.getState()) {
     protection: { avgMonthlySpend:round(recovery.reserve.avgSpend), reserveCurrent:round(recovery.reserve.current), reserveTargetReference:round(recovery.reserve.target3), reserveGap, reserveMonths:round(recovery.reserve.monthsBefore), userReserveGoal:round(reserveGoal?.target || s.emergencyPlan?.target || 0) },
     direction: { stage:stage.id, stageLabel:stage.label, stageReason:stage.reason, priorityId:priority.id, priorityTitle:priority.title, priorityDetail:priority.detail, recoveryProgress:round(recovery.progress), debtsCount:recovery.debts.rows.length, debtsTotal:round(recovery.debts.total), overdueDebts:recovery.debts.rows.filter(x=>x.overdue).length },
     preferences: { savingPercent:round(s.savingPlan?.percent || 0) },
-    quality: { transactions:s.transactions.length, cards:s.cards.length, hasBalanceBase:F.hasBalanceBase(s) }
+    quality: { transactionCount:s.transactions.length, cards:s.cards.length, hasBalanceBase:F.hasBalanceBase(s) }
   };
 }
 

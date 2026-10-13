@@ -17,6 +17,6 @@ t('shell do SW aponta para assets 11.85.0', /app\.css\?v=11\.85\.0/.test(sw)&&/j
 t('Supabase usa clientPromise compartilhada', /let client = null, clientPromise = null/.test(cloud)&&/if \(clientPromise\) return clientPromise/.test(cloud));
 t('SW é registrado sem cache intermediário', /updateViaCache:\s*'none'/.test(main));
 t('registro força conferência de atualização', /reg\.update\(\)/.test(main));
-t('assistant mantém cache-bust de sua revisão', /views\/assistant\.js\?v=11\.84\.0/.test(main));
+t('assistant mantém cache-bust de sua revisão', /views\/assistant\.js\?v=11\.85\.0-gemini-fix2/.test(main));
 console.log(`\n${pass}/${pass+fail} testes passaram`);
 if(fail) process.exit(1);

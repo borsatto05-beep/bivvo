@@ -79,7 +79,8 @@ exports.handler=async event=>{
   if(!(await rateLimit('assistant:'+user.id,12,60)))return out(429,{error:'Muitas perguntas seguidas. Espere um minuto.'});
   let body;try{body=JSON.parse(event.body||'{}')}catch{return out(400,{error:'Pedido inválido.'})}
   const question=String(body.question||'').trim().slice(0,500), tools=body.tools;
-  if(question.length<3||!validTools(tools))return out(400,{error:'Pergunta ou resumo financeiro inválido.'});
+  if(question.length<3)return out(400,{code:'invalid_question',error:'Escreva uma pergunta com pelo menos 3 caracteres.'});
+  if(!validTools(tools))return out(400,{code:'invalid_summary',error:'O resumo financeiro não passou na validação. Atualize o app e tente novamente.',revision:'gemini-fix2'});
   const access=await limitsOf(rest,user.id); if(access.ai<=0)return out(403,{code:'plan',error:'O Bivvo IA está disponível nos planos compatíveis.'});
   const plan=access.plan, limit=access.ai, aiTier=Math.max(1,Math.min(5,Number(access.aiTier||1))), aiLevel=AI_LEVELS[aiTier]||AI_LEVELS[1], per=period(); let used;
   try{used=await rest('rpc/bivvo_consume_usage',{method:'POST',body:{p_user:user.id,p_feature:'ai',p_period:per,p_limit:limit}})}catch(e){console.error('assistant quota',e.message);return out(503,{code:'not_configured',error:'Não foi possível validar a cota do Bivvo IA.'})}

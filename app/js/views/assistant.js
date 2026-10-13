@@ -4,7 +4,7 @@ import { canUseFeature, getAiLevel } from '../plans.js';
 import { openPaywall } from './pro.js';
 import { toast } from '../ui.js';
 import { track } from '../analytics.js';
-import { toolResults, rayX, askAI, aiUsage, suggestedQuestions } from '../assistant.js?v=11.64.0';
+import { toolResults, rayX, askAI, aiUsage, suggestedQuestions } from '../assistant.js?v=11.85.0-gemini-fix2';
 
 const CONSENT='bivvo_ai_consent_gemini_v2', CRISIS_CTX='bivvo_recovery_crisis_context_v1';
 function hasConsent(){ try{return localStorage.getItem(CONSENT)==='1';}catch{return false;} }

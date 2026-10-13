@@ -20,7 +20,7 @@ function visit(dir,rel='') {
 visit(root);rmSync(out,{recursive:true,force:true});mkdirSync(out,{recursive:true});
 for(const p of paths) {mkdirSync(path.dirname(path.join(out,p)),{recursive:true});copyFileSync(path.join(root,p),path.join(out,p));}
 // Content-derived cache identity: even an accidental same-version deploy gets its own complete shell.
-const coreRoot=new Set(['index.html','app.css','budget-guided.css','company-education.css','life-education.css','landing-v4.css','orbit.css','privacy.css','loan-installments.css','landing-v4.js','orbit-landing.js','seo-premium-1140.css','seo-premium-1140.js','manifest.webmanifest','apple-touch-icon.png','favicon-16.png','favicon-32.png','favicon.ico','icon-192.png','icon-512.png']);
+const coreRoot=new Set(['index.html','app.css','nova.css','nova-public.css','budget-guided.css','company-education.css','life-education.css','landing-v4.css','orbit.css','privacy.css','loan-installments.css','landing-v4.js','orbit-landing.js','seo-premium-1140.css','seo-premium-1140.js','manifest.webmanifest','apple-touch-icon.png','favicon-16.png','favicon-32.png','favicon.ico','icon-192.png','icon-512.png']);
 // Offline shell must contain the app itself, not every SEO/marketing page. Pre-caching the
 // entire public site made one optional asset/network race abort the service-worker install.
 const shell=paths.filter(p=>p.startsWith('js/') || p.startsWith('fonts/') || coreRoot.has(p)).sort();

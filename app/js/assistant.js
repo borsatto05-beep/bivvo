@@ -7,6 +7,7 @@ import * as cloud from './cloud.js';
 import { getRemainingUsage, setUsage } from './plans.js';
 import { getFinancialStage, getRecoveryPriority } from './recovery.js';
 import { recoveryAnalysis } from './copilot.js';
+import { detailedFinancialPlan } from './financial-plan.js';
 
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const round = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -33,7 +34,7 @@ export function toolResults(s = store.getState()) {
     protection: { avgMonthlySpend:round(recovery.reserve.avgSpend), reserveCurrent:round(recovery.reserve.current), reserveTargetReference:round(recovery.reserve.target3), reserveGap, reserveMonths:round(recovery.reserve.monthsBefore), userReserveGoal:round(reserveGoal?.target || s.emergencyPlan?.target || 0) },
     direction: { stage:stage.id, stageLabel:stage.label, stageReason:stage.reason, priorityId:priority.id, priorityTitle:priority.title, priorityDetail:priority.detail, recoveryProgress:round(recovery.progress), debtsCount:recovery.debts.rows.length, debtsTotal:round(recovery.debts.total), overdueDebts:recovery.debts.rows.filter(x=>x.overdue).length },
     preferences: { savingPercent:round(s.savingPlan?.percent || 0) },
-    quality: { transactions:s.transactions.length, cards:s.cards.length, hasBalanceBase:F.hasBalanceBase(s) }
+    quality: { transactionCount:s.transactions.length, cards:s.cards.length, hasBalanceBase:F.hasBalanceBase(s) }
   };
 }
 
@@ -58,6 +59,7 @@ function investmentDirection(x){
 export function localAnswer(question, tools = toolResults()) {
   const q = norm(question), x = tools;
   if (!q) return null;
+  if (/planejamento|plano|pago primeiro|cortar|vazando|parar de parcelar|mexer na reserva|dinheiro durar|dividir dinheiro|evitar voltar/.test(q)) return {kind:'local',title:'Seu planejamento financeiro',text:stageDirection(x)};
   if (/qual.*proximo passo|o que devo fazer agora|por onde comeco|me de uma direcao|preciso de uma direcao/.test(q)) return {kind:'local',title:'Seu próximo passo',text:stageDirection(x)};
   if (/o que.*faco.*hoje|missao.*hoje|qual.*prioridade.*hoje/.test(q)) { const risk=x.forecast.riskDate; return {kind:'local',title:'Sua missão de hoje',text:risk ? `Hoje, proteja seu caixa e tente ficar dentro de ${money0(Math.max(0,x.spendable.perDay))}. Com os dados atuais, a projeção pode ficar negativa em ${naturalDate(risk)}. ${x.direction.priorityTitle} é a prioridade.` : x.spendable.free < 0 ? `Hoje, evite assumir novos gastos e priorize os compromissos essenciais. Seu dinheiro livre está negativo em ${money0(Math.abs(x.spendable.free))}. ${x.direction.priorityTitle} é a prioridade.` : `Hoje, mantenha seus gastos dentro de ${money0(Math.max(0,x.spendable.perDay))}. Não há quebra de caixa projetada nos próximos 30 dias. ${x.direction.priorityTitle} é o próximo ponto a observar.`}; }
   if (/quanto.*(posso|livre).*(gastar|usar)|quanto.*gastar|livre.*gastar/.test(q)) return { kind:'local', title:'Quanto você pode gastar', text:x.spendable.free >= 0 ? `Você tem ${money0(x.spendable.free)} livres até ${x.spendable.until}, cerca de ${money0(x.spendable.perDay)} por dia. Esse valor já desconta contas, faturas e a parte que falta da sua meta de guardar.` : `Seu livre está negativo em ${money0(Math.abs(x.spendable.free))}. Pelos dados atuais, contas, faturas e meta de guardar ultrapassam o saldo disponível até ${x.spendable.until}.` };
@@ -89,18 +91,7 @@ export function localAnswer(question, tools = toolResults()) {
 
 export function elaborateLocalAnswer(local, tools = toolResults()) {
   if (!local?.text) return local;
-  const x=tools;
-  const stage=`Seu momento financeiro está classificado como ${x.direction.stageLabel}. ${x.direction.stageReason}`;
-  const month=`Neste mês, entraram ${money0(x.month.incomePaid)}, saíram ${money0(x.month.spend)} e o resultado acompanhado está em ${money0(x.month.result)}.`;
-  let outlook;
-  if (x.forecast.riskDate) outlook=`A projeção indica risco de o saldo cruzar zero em ${naturalDate(x.forecast.riskDate)}; isso torna liquidez e vencimentos mais urgentes do que novos compromissos.`;
-  else outlook=`A projeção de 30 dias está em ${money0(x.forecast.day30)} e, com os dados atuais, não aparece quebra de caixa nesse horizonte.`;
-  let action;
-  if (x.spendable.free < 0) action=`Priorize o essencial, revise o que vence primeiro e evite criar novas parcelas até recuperar margem. A prioridade registrada pelo Bivvo é: ${x.direction.priorityTitle}.`;
-  else if (x.direction.debtsCount > 0) action=`Use a sobra com cautela: preserve os próximos vencimentos e compare o custo real das pendências antes de decidir entre antecipar dívida, guardar ou investir.`;
-  else if (x.protection.reserveGap > 0) action=`Como ainda existe uma diferença de ${money0(x.protection.reserveGap)} para a referência de proteção do Bivvo, vale fortalecer a reserva sem comprometer as contas do período.`;
-  else action=`Com o caixa mais protegido, você pode dividir a margem entre objetivos de curto prazo e decisões de longo prazo, sempre preservando o dinheiro dos compromissos.`;
-  return {...local,text:`${local.text}\n\nLeitura do cenário: ${month} ${stage}\n\nPor que isso importa: ${outlook}\n\nPróximo passo: ${action}`};
+  return {...local,text:detailedFinancialPlan(tools,local.text)};
 }
 
 export function suggestedQuestions(tools = toolResults()) {

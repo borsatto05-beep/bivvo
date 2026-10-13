@@ -1,7 +1,7 @@
 /* Bivvo — utilitários puros e construtor de DOM seguro.
    Regra da casa: texto vindo do usuário entra SEMPRE como textContent. */
 
-export const VERSION = '11.84.0';
+export const VERSION = '11.85.0';
 export const RELEASE_DATE = '13/10/2026';
 
 /* ---------- números e moeda ---------- */

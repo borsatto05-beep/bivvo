@@ -5,6 +5,7 @@ import * as F from '../finance.js';
 import { CHALLENGES, challengeDef, challengeProgress, startChallenge } from '../insights.js';
 import { emptyState, sectionTitle, progress, segmented, openSheet, toast, catIcon, field, confirmSheet } from '../ui.js';
 import { stat } from './components.js';
+import { budgetPie } from './budget-pie.js';
 import { openBudgetForm, openGoalForm, openGoalMove, openFixedForm, openInvestmentForm, refreshQuotes, moneyInput } from './forms.js';
 import { monthSwitcher } from './extrato.js';
 import { ctx, rerender,go } from '../nav.js';
@@ -164,6 +165,8 @@ function budget(root) {
   root.append(h('section.card.budget-learning-callout',
     h('div',h('span.eyebrow','ORÇAMENTO GUIADO'),h('h3','Aprenda a montar um orçamento que cabe na sua renda'),h('p','O Bivvo usa sua renda, reserva a meta de guardar e ensina como escolher o limite de cada categoria.')),
     h('button.btn.primary',{type:'button',onclick:openBudgetEducation},'Montar passo a passo')));
+
+  root.append(budgetPie({rows,ym,onEdit:openBudgetForm}));
 
   root.append(h('section.card.budget-income-plan',
     h('div.card-head',h('h3','Seu plano do mês'),h('small.muted',plan.incomeLabel)),

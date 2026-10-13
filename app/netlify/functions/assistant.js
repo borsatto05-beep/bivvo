@@ -18,7 +18,7 @@ function modelsForTier(tier){
   if(tier===4)return strong([process.env.GEMINI_ASSISTANT_MODEL_SPECIALIST,'gemini-2.5-pro','gemini-2.5-flash',base]);
   if(tier===3)return strong([process.env.GEMINI_ASSISTANT_MODEL_ADVANCED,'gemini-2.5-flash',base]);
   if(tier===2)return strong([process.env.GEMINI_ASSISTANT_MODEL_CONTEXTUAL,'gemini-2.5-flash',base]);
-  return strong([process.env.GEMINI_ASSISTANT_MODEL_ESSENTIAL,'gemini-2.5-flash',base]);
+  return strong([process.env.GEMINI_ASSISTANT_MODEL_ESSENTIAL,base,'gemini-2.5-flash']);
 }
 async function generateWithTier({tier,systemPrompt,userPrompt}){
   const level=AI_LEVELS[tier]||AI_LEVELS[1]; let last='';
@@ -39,8 +39,20 @@ const finite=n=>Number.isFinite(Number(n))&&Math.abs(Number(n))<1e9;
 function validTools(t){
   if(!t||typeof t!=='object'||Array.isArray(t))return false;
   const raw=JSON.stringify(t); if(raw.length>16000)return false;
-  const banned=['transactions','description','desc','merchant','email','phone','user_id'];
-  if(banned.some(k=>Object.prototype.hasOwnProperty.call(t,k))||/"(transactions|description|desc|merchant|email|phone|user_id)"\s*:/.test(raw))return false;
+  const banned=new Set(['transactions','description','desc','merchant','email','phone','user_id']);
+  // quality.transactions is only an aggregate count, never a list of records.
+  function safeFields(value,path=[]){
+    if(!value||typeof value!=='object')return true;
+    return Object.entries(value).every(([key,item])=>{
+      if(banned.has(key)){
+        if(key==='transactions'&&path.length===1&&path[0]==='quality')
+          return typeof item==='number'&&Number.isSafeInteger(item)&&item>=0;
+        return false;
+      }
+      return safeFields(item,[...path,key]);
+    });
+  }
+  if(!safeFields(t))return false;
   const must=[t.spendable?.free,t.spendable?.balance,t.month?.spend,t.forecast?.day30]; return must.every(finite);
 }
 function numbersIn(obj){const a=[];const walk=v=>{if(typeof v==='number'&&Number.isFinite(v))a.push(v);else if(v&&typeof v==='object')Object.values(v).forEach(walk)};walk(obj);return a;}
@@ -67,7 +79,8 @@ exports.handler=async event=>{
   if(!(await rateLimit('assistant:'+user.id,12,60)))return out(429,{error:'Muitas perguntas seguidas. Espere um minuto.'});
   let body;try{body=JSON.parse(event.body||'{}')}catch{return out(400,{error:'Pedido inválido.'})}
   const question=String(body.question||'').trim().slice(0,500), tools=body.tools;
-  if(question.length<3||!validTools(tools))return out(400,{error:'Pergunta ou resumo financeiro inválido.'});
+  if(question.length<3)return out(400,{code:'invalid_question',error:'Escreva uma pergunta com pelo menos 3 caracteres.'});
+  if(!validTools(tools))return out(400,{code:'invalid_summary',error:'O resumo financeiro não passou na validação. Atualize o app e tente novamente.',revision:'gemini-fix2'});
   const access=await limitsOf(rest,user.id); if(access.ai<=0)return out(403,{code:'plan',error:'O Bivvo IA está disponível nos planos compatíveis.'});
   const plan=access.plan, limit=access.ai, aiTier=Math.max(1,Math.min(5,Number(access.aiTier||1))), aiLevel=AI_LEVELS[aiTier]||AI_LEVELS[1], per=period(); let used;
   try{used=await rest('rpc/bivvo_consume_usage',{method:'POST',body:{p_user:user.id,p_feature:'ai',p_period:per,p_limit:limit}})}catch(e){console.error('assistant quota',e.message);return out(503,{code:'not_configured',error:'Não foi possível validar a cota do Bivvo IA.'})}
@@ -124,6 +137,6 @@ ESTILO:
     const generated=await generateWithTier({tier:aiTier,systemPrompt,userPrompt});
     const j=generated.json, answer=(j.candidates||[]).flatMap(c=>c.content?.parts||[]).map(p=>p.text||'').join('').trim();
     if(!answer||!verifyNumbers(answer,tools)){await refund();return out(200,{title:'Bivvo IA',answer:'Não consegui validar todos os valores dessa resposta com segurança. Tente perguntar sobre seu saldo livre, mês, previsão, reserva, dívidas ou próximos passos.',verified:false,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used:Math.max(0,used-1),limit}})}
-    return out(200,{title:'Bivvo IA',answer,verified:true,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used,limit}});
+    return out(200,{title:'Bivvo IA',answer,provider:'gemini',model:generated.model,verified:true,aiLevel:{tier:aiTier,label:aiLevel.label},usage:{used,limit}});
   }catch(e){console.error('assistant',e.message);await refund();return out(502,{error:'O Bivvo IA não conseguiu concluir a análise agora. Tente novamente.'})}
 };

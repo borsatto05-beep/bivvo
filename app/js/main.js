@@ -16,7 +16,7 @@ import { adminMe } from './admin-api.js';
 import { adminTrack, trackVisit, trackSignupStart, startPresenceTracking } from './admin-analytics.js?v=11.74.0';
 import { renderCalendar } from './views/calendar.js';
 import { renderForecast } from './views/forecast.js';
-import { renderAssistant } from './views/assistant.js?v=11.84.0';
+import { renderAssistant } from './views/assistant.js?v=11.85.0-gemini-fix2';
 import { renderFamily, openCoupleQuickAdd } from './views/family.js';
 import { renderLoans } from './views/loans.js?v=11.42.6';
 import { renderRecovery } from './views/recovery.js';
@@ -64,7 +64,7 @@ const TAB_NAV = {
       ? { key: 'emprestimos', route: 'emprestimos', label: 'Capital', emoji: '◈' }
       : { key: 'calendario', route: 'calendario', label: 'Calendário', emoji: '📅' },
     { key: 'cartoes', route: 'cartoes', label: 'Cartões', iconClass: 'ico ico-card' },
-    { key: 'planos', route: 'planos', label: 'Planejamento', iconClass: 'ico ico-plan' }
+    { key: 'planos', route: 'planos', label: 'Planos', iconClass: 'ico ico-plan' }
   ],
   couple: () => [
     { key: 'resumo', route: 'familia', params: { couple: '1' }, label: 'Casal', emoji: '💑' },

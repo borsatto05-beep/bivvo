@@ -28,8 +28,8 @@ function greeting(name) {
 export function renderHome(root) {
   if(store.activeFinanceProfile()==='company'){root.append(learningLaunchCard('company'));renderCompanyHome(root);return;}
   // 11.65 — restaura o Início completo e mantém a Órbita como atalho compacto e clicável.
-  root.append(learningLaunchCard('personal'));
   renderHomeFull(root);
+  root.append(learningLaunchCard('personal'));
 }
 
 function renderHomeFull(root) {
@@ -215,7 +215,7 @@ function renderHomeFull(root) {
   const map={month:'.month',favorites:'.home-favorites',weekly:'.home-weekly',agenda:'.home-agenda',cards:'.inv',recent:'.home-recent',insights:'.home-insights',forecast:'.my-day'};
   for(const [key,selector] of Object.entries(map))grid.querySelectorAll(selector).forEach(el=>{el.hidden=!homeVisible(key,s);});
   const essential=document.createDocumentFragment();
-  for(const selector of ['.qc-shell','.hero','.home-agenda','.home-favorites','.month','.home-weekly']){const node=left.querySelector(selector);if(node)essential.append(node);}
+  for(const selector of ['.hero','.qc-shell','.home-agenda','.home-favorites','.month','.home-weekly']){const node=left.querySelector(selector);if(node)essential.append(node);}
   left.prepend(essential);
   const advanced=left.querySelector('.home-optional-content');const ai=left.querySelector('.ai-home');if(advanced&&ai)advanced.append(ai);const checkin=right.querySelector('.checkin');if(advanced&&checkin)advanced.append(checkin);
   root.append(head,grid);

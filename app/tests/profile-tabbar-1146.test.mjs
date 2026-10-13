@@ -6,7 +6,7 @@ const family=readFileSync('js/views/family.js','utf8');
 const css=readFileSync('app.css','utf8');
 
 assert.equal((html.match(/data-tab-slot=/g)||[]).length,5,'mobile tabbar must keep exactly five dynamic slots');
-for(const label of ['Início','Movimentos','Calendário','Cartões','Planejamento']) assert(main.includes(`label: '${label}'`),`missing personal tab ${label}`);
+for(const label of ['Início','Movimentos','Calendário','Cartões','Planos']) assert(main.includes(`label: '${label}'`),`missing personal tab ${label}`);
 for(const label of ['Casal','Gastos','Divisão','Agenda','Você']) assert(main.includes(`label: '${label}'`),`missing couple tab ${label}`);
 for(const label of ['Empresa','Caixa','Agenda','Cartões','Gestão']) assert(main.includes(`label: '${label}'`),`missing company tab ${label}`);
 for(const tab of ['gastos','divisao','agenda']) assert(main.includes(`tab: '${tab}'`),`couple route missing tab ${tab}`);

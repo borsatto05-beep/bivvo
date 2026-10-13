@@ -22,24 +22,26 @@
 <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
 <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
 <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
-<link href="app.css?v=11.84.0" rel="stylesheet"/>
+<link href="app.css?v=11.85.0" rel="stylesheet"/>
 <link href="admin-education.css?v=11.74.0" rel="stylesheet"/>
-<link href="budget-guided.css?v=11.84.0" rel="stylesheet"/>
-<link href="company-education.css?v=11.84.0" rel="stylesheet"/>
-<link href="life-education.css?v=11.84.0" rel="stylesheet"/>
-<script src="js/main.js?v=11.84.0" type="module"></script>
+<link href="budget-guided.css?v=11.85.0" rel="stylesheet"/>
+<link href="company-education.css?v=11.85.0" rel="stylesheet"/>
+<link href="life-education.css?v=11.85.0" rel="stylesheet"/>
+<script src="js/main.js?v=11.85.0" type="module"></script>
 <link rel="stylesheet" href="landing-v4.css?v=11.61.0"/>
-<link rel="stylesheet" href="orbit.css?v=11.84.0"/>
+<link rel="stylesheet" href="orbit.css?v=11.85.0"/>
 <script defer src="landing-v4.js?v=11.61.0"></script>
-<script defer src="orbit-landing.js?v=11.84.0"></script>
+<script defer src="orbit-landing.js?v=11.85.0"></script>
 <script defer src="/js/privacy.js?v=11.61.0"></script>
-<script defer src="/js/google-ads.js?v=11.84.0"></script>
+<script defer src="/js/google-ads.js?v=11.85.0"></script>
 <!-- TikTok Pixel: external file to comply with CSP -->
 <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
 <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script><link rel="stylesheet" href="/privacy.css?v=11.61.0">
-<link rel="stylesheet" href="loan-installments.css?v=11.84.0"/>
+<link rel="stylesheet" href="loan-installments.css?v=11.85.0"/>
 <link rel="stylesheet" href="install-android.css?v=11.82.0"/>
 <script defer src="install-android.js?v=11.82.0"></script>
+<link href="nova.css?v=11.85.0" rel="stylesheet"/>
+<script src="js/theme.js?v=11.85.0"></script>
 </head>
 <body class="booting">
 <a class="skip" href="#view">Pular para o conteúdo</a>
@@ -51,7 +53,7 @@
   <nav class="l4-nav" aria-label="Navegação principal">
     <div class="l4-brand"><img alt="" src="icon-192.png" width="38" height="38"><div><b>Bivvo</b><small>Um passo real por vez</small></div></div>
     <div class="l4-navlinks"><button class="landing-nav-link" data-scroll="landingTour" type="button">Ver o app</button><button class="landing-nav-link" data-scroll="landingProfiles" type="button">Perfis</button><button class="landing-nav-link" data-scroll="landingFunctions" type="button">Novidades</button><button class="landing-nav-link" data-scroll="landingPricing" type="button">Planos</button></div>
-    <div class="l4-actions"><button class="btn ghost" id="landingLogin" type="button">Entrar</button><button class="btn primary l4-start" id="landingStart" type="button">Começar grátis</button></div>
+    <div class="l4-actions"><button class="theme-toggle" data-theme-toggle type="button" aria-label="Ativar modo escuro" aria-pressed="false"></button><button class="btn ghost" id="landingLogin" type="button">Entrar</button><button class="btn primary l4-start" id="landingStart" type="button">Começar grátis</button></div>
   </nav>
 
   <div class="l4-wrap">
@@ -229,6 +231,7 @@
       Início
     </div>
 <span class="sync-dot" id="syncDot" role="status"></span><span class="sync-status" id="syncStatus" role="status" aria-live="polite"></span>
+<button class="theme-toggle" data-theme-toggle type="button" aria-label="Ativar modo escuro" aria-pressed="false"></button>
 <button aria-label="Você e configurações" class="tb-me" data-route="voce" type="button">
 <span aria-hidden="true" class="ico ico-me"></span>
 </button>

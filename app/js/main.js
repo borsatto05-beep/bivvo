@@ -64,7 +64,7 @@ const TAB_NAV = {
       ? { key: 'emprestimos', route: 'emprestimos', label: 'Capital', emoji: '◈' }
       : { key: 'calendario', route: 'calendario', label: 'Calendário', emoji: '📅' },
     { key: 'cartoes', route: 'cartoes', label: 'Cartões', iconClass: 'ico ico-card' },
-    { key: 'planos', route: 'planos', label: 'Planejamento', iconClass: 'ico ico-plan' }
+    { key: 'planos', route: 'planos', label: 'Planos', iconClass: 'ico ico-plan' }
   ],
   couple: () => [
     { key: 'resumo', route: 'familia', params: { couple: '1' }, label: 'Casal', emoji: '💑' },

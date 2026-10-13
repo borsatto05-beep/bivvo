@@ -1,8 +1,8 @@
 /* Bivvo v10.4 — service worker.
    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
-const VERSION = 'bivvo-v11-84-0';
-const SHELL = /* BUILD_PRECACHE */ ['./', './index.html', './app.css?v=11.84.0', './js/main.js?v=11.84.0'];
+const VERSION = 'bivvo-v11-85-0';
+const SHELL = /* BUILD_PRECACHE */ ['./', './index.html', './app.css?v=11.85.0', './js/main.js?v=11.85.0'];
 // All assets of a release must install successfully. No partial offline shell.
 self.addEventListener('install', e => e.waitUntil((async()=>{
   const cache=await caches.open(VERSION);

@@ -10,5 +10,5 @@ t('casal ensina divisão, orçamento, reserva e comunicação',/split:/.test(lif
 t('popups têm o que é, importância, cálculo, exemplo, erro e jeito certo',/Por que isso importa/.test(life)&&/Como calcular/.test(life)&&/Exemplo/.test(life)&&/Erro comum/.test(life)&&/Jeito certo de fazer/.test(life));
 t('simuladores pessoal e casal existem',/Simulador de reserva/.test(life)&&/Simulador de divisão do casal/.test(life)&&/Simulador de meta conjunta/.test(life));
 t('main injeta tutor conforme perfil',/profilePageTutor\(financeMode,name,params\)/.test(main));
-t('CSS didático carregado',/life-education\.css\?v=11\.84\.0/.test(index));
+t('CSS didático carregado',/life-education\.css\?v=11\.85\.0/.test(index));
 console.log(`\n${pass}/${pass+fail} testes passaram`);if(fail)process.exit(1);

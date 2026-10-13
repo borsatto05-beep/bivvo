@@ -39,8 +39,20 @@ const finite=n=>Number.isFinite(Number(n))&&Math.abs(Number(n))<1e9;
 function validTools(t){
   if(!t||typeof t!=='object'||Array.isArray(t))return false;
   const raw=JSON.stringify(t); if(raw.length>16000)return false;
-  const banned=['transactions','description','desc','merchant','email','phone','user_id'];
-  if(banned.some(k=>Object.prototype.hasOwnProperty.call(t,k))||/"(transactions|description|desc|merchant|email|phone|user_id)"\s*:/.test(raw))return false;
+  const banned=new Set(['transactions','description','desc','merchant','email','phone','user_id']);
+  // quality.transactions is only an aggregate count, never a list of records.
+  function safeFields(value,path=[]){
+    if(!value||typeof value!=='object')return true;
+    return Object.entries(value).every(([key,item])=>{
+      if(banned.has(key)){
+        if(key==='transactions'&&path.length===1&&path[0]==='quality')
+          return typeof item==='number'&&Number.isSafeInteger(item)&&item>=0;
+        return false;
+      }
+      return safeFields(item,[...path,key]);
+    });
+  }
+  if(!safeFields(t))return false;
   const must=[t.spendable?.free,t.spendable?.balance,t.month?.spend,t.forecast?.day30]; return must.every(finite);
 }
 function numbersIn(obj){const a=[];const walk=v=>{if(typeof v==='number'&&Number.isFinite(v))a.push(v);else if(v&&typeof v==='object')Object.values(v).forEach(walk)};walk(obj);return a;}

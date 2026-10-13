@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const main=readFileSync('js/main.js','utf8');
+const html=readFileSync('index.html','utf8');
+const family=readFileSync('js/views/family.js','utf8');
+const css=readFileSync('app.css','utf8');
+
+assert.equal((html.match(/data-tab-slot=/g)||[]).length,5,'mobile tabbar must keep exactly five dynamic slots');
+for(const label of ['Início','Movimentos','Calendário','Cartões','Planejamento']) assert(main.includes(`label: '${label}'`),`missing personal tab ${label}`);
+for(const label of ['Casal','Gastos','Divisão','Agenda','Você']) assert(main.includes(`label: '${label}'`),`missing couple tab ${label}`);
+for(const label of ['Empresa','Caixa','Agenda','Cartões','Gestão']) assert(main.includes(`label: '${label}'`),`missing company tab ${label}`);
+for(const tab of ['gastos','divisao','agenda']) assert(main.includes(`tab: '${tab}'`),`couple route missing tab ${tab}`);
+assert(main.includes("data.profileNav=financeMode") || main.includes('dataset.profileNav=financeMode'));
+assert(main.includes('openCoupleQuickAdd'));
+assert(family.includes("tab === 'gastos'"));
+assert(family.includes("tab === 'divisao'"));
+assert(family.includes("tab === 'agenda'"));
+assert(family.includes('export function openCoupleQuickAdd'));
+assert(css.includes('.tabbar[data-profile-nav="couple"]'));
+assert(css.includes('.tabbar[data-profile-nav="company"]'));
+console.log('Profile-specific five-tab navigation is mapped for Personal, Couple and Company without mixing Couple quick-add into personal finance.');

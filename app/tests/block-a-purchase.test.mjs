@@ -1,0 +1,13 @@
+import { purchaseVerdict, futurePurchaseImpact, bestPurchaseWindow, shouldImpulseBrake } from '../js/simulate.js';
+let pass=0, fail=0; const ok=(n,v)=>{ if(v){console.log('  ✓ '+n);pass++;}else{console.error('  ✗ '+n);fail++;}};
+const base={opt:{method:'card',value:1200,down:0,parts:12},partValue:100,overLimit:false,after:{free:600},tone:'tranquilo',dropShare:.2,months:[{ym:'2026-10',before:500,after:600},{ym:'2026-11',before:500,after:600},{ym:'2026-12',before:300,after:400}],worst:{before:500,after:600},limitAfter:.5};
+ok('compra saudável recebe Pode comprar', purchaseVerdict(base).level==='pode');
+ok('impacto futuro usa total/parcelas reais da simulação', futurePurchaseImpact(base).futureTotal===1200 && futurePurchaseImpact(base).monthlyAdded===100);
+ok('melhor janela vem de queda observada nas faturas', bestPurchaseWindow({...base,tone:'atencao'})?.ym==='2026-12');
+ok('freio não aparece em compra saudável', shouldImpulseBrake(base)===false);
+const risk={...base,tone:'apertado',dropShare:.7,after:{free:100}};
+ok('compra de alto impacto é arriscada', purchaseVerdict(risk).level==='arriscada');
+ok('freio aparece em compra de alto impacto', shouldImpulseBrake(risk)===true);
+const no={...base,after:{free:-10}};
+ok('saldo livre negativo não é recomendado', purchaseVerdict(no).level==='nao');
+console.log(`\n${pass} passaram, ${fail} falharam`); if(fail) process.exit(1);

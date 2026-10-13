@@ -1,0 +1,16 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const admin=readFileSync('js/views/admin.js','utf8');
+const api=readFileSync('netlify/functions/admin.js','utf8');
+const analytics=readFileSync('netlify/functions/analytics-event.js','utf8');
+const tracker=readFileSync('js/admin-analytics.js','utf8');
+assert.match(admin,/Usuários online/);
+assert.match(admin,/TEMPO MÉDIO POR SESSÃO/);
+assert.match(admin,/ABA MAIS USADA/);
+assert.match(api,/async function activity\(q=\{\}\)/);
+assert.match(api,/onlineCutoff/);
+assert.match(api,/average_session_seconds/);
+assert.match(api,/most_used_route/);
+assert.match(analytics,/session_heartbeat/);
+assert.match(tracker,/setInterval\(sendPresence, 60000\)/);
+console.log('admin activity 11.74 ok');

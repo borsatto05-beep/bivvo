@@ -1,0 +1,13 @@
+import { behaviorAnalysis } from '../js/copilot.js';
+import * as store from '../js/store.js';
+let pass=0,fail=0; const ok=(n,v)=>{if(v){console.log('  ✓ '+n);pass++;}else{console.error('  ✗ '+n);fail++;}};
+const r=behaviorAnalysis(store.getState());
+ok('vazamentos retornam estrutura explicável', typeof r.leak.relevant==='boolean' && Array.isArray(r.leak.categories));
+ok('pequenos gastos nunca geram total negativo', r.leak.total>=0);
+ok('assinaturas retornam mensal e anual', r.subscriptions.monthly>=0 && Math.abs(r.subscriptions.annual-r.subscriptions.monthly*12)<0.011);
+ok('recorrências detectadas ficam separadas das explícitas', Array.isArray(r.subscriptions.detected) && Array.isArray(r.subscriptions.explicit));
+ok('bola de neve usa seis meses', r.installments.timeline.length===6);
+ok('timeline de parcelas nunca é negativa', r.installments.timeline.every(x=>x.value>=0));
+ok('simulador parar hoje não altera o estado', r.stopToday.timeline===r.installments.timeline);
+ok('total futuro é não negativo', r.installments.futureTotal>=0);
+console.log(`\n${pass} passaram, ${fail} falharam`); if(fail) process.exit(1);

@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const src=fs.readFileSync(new URL('../js/views/loans.js',import.meta.url),'utf8');
+assert.match(src,/VENCE HOJE/);
+assert.match(src,/Nada vence hoje/);
+assert.match(src,/Parcela \$\{x\.number\}\/\$\{rows\.length\}/);
+assert.match(src,/Data de vencimento/);
+assert.match(src,/Maior valor/);
+assert.match(src,/Menor valor/);
+assert.match(src,/nextLoanDue\(a,s\.loanPayments\)/);
+console.log('PASS: Bivvo Capital mostra vencimentos de hoje e ordena por vencimento/maior/menor valor.');

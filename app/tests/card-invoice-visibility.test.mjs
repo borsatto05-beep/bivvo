@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+const RealDate=Date;const FIX=new RealDate(2026,9,8,12).getTime();globalThis.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[FIX]));}static now(){return FIX;}};
+globalThis.window={addEventListener(){}};globalThis.sessionStorage={getItem(){return null;},setItem(){},removeItem(){}};globalThis.localStorage=globalThis.sessionStorage;
+const store=await import('../js/store.js'),F=await import('../js/finance.js');
+const s=store.emptyState({onboarded:true});s.cards=[{id:'c',name:'Cartão',close:20,due:28,limit:10000}];s.transactions=[{id:'i',desc:'Saldo',type:'income',cat:'Salário',method:'PIX',status:'Pago',value:1000,date:'2026-10-01'}];
+store.addCardPurchase(s,{desc:'Compra antiga',cat:'Compras',total:120,parts:1,card:'Cartão',date:'2026-09-08'});store.addCardPurchase(s,{desc:'Compra aberta',cat:'Compras',total:250,parts:1,card:'Cartão',date:'2026-10-08'});store.load(s,{demo:true});
+const before=structuredClone(store.getState().transactions),balance=F.balance(),spend=F.monthSummary('2026-10').spend;
+const entries=F.pendingCardInvoices();assert.equal(entries.length,2);assert.equal(entries[0].value,120);assert.equal(entries[0].invoice.state,'vencida');assert.equal(entries[1].value,250);assert.equal(entries[1].invoice.state,'aberta');assert.equal(entries[1].date,'2026-10-28');
+assert.deepEqual(store.getState().transactions,before);assert.equal(F.balance(),balance);assert.equal(F.monthSummary('2026-10').spend,spend);
+store.commit(st=>{const t=st.transactions.find(t=>t.method==='Crédito'&&t.invoice==='2026-10');t.cardPaymentManaged=true;t.cardPaidAmount=100;});assert.equal(F.pendingCardInvoices().find(t=>t.invoice.ym==='2026-10').value,150);
+console.log('Faturas visíveis com saldo pendente sem duplicar despesas ou modificar o saldo.');

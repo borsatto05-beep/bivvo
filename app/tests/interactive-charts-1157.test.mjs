@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const company=fs.readFileSync('js/views/company-home.js','utf8');
+const couple=fs.readFileSync('js/views/family.js','utf8');
+const css=fs.readFileSync('app.css','utf8');
+assert(company.includes('interactiveBICard'),'Empresa deve usar cards BI interativos');
+assert(company.includes('openCompanyInsight'),'Empresa deve abrir drill-down em modal');
+for(const title of ['Desempenho mensal','Projeção de caixa','Mapa de custos','Aging de recebíveis','Meta de faturamento','Receita por origem','Estrutura de custos','Saúde operacional']) assert(company.includes(title),title);
+assert(couple.includes('coupleAnalyticsSection'),'Casal deve ter dashboard visual');
+assert(couple.includes('coupleTrendCard'),'Casal deve ter evolução de 6 meses');
+assert(couple.includes('coupleExpenseDonut'),'Casal deve ter distribuição por categoria');
+assert(couple.includes('coupleContributionCard'),'Casal deve comparar participação do casal');
+assert(couple.includes('openCoupleInsight'),'Casal deve abrir detalhes em modal');
+assert(css.includes('.bi-detail-modal'),'Modal BI deve ter estilo próprio');
+assert(css.includes('@media(prefers-reduced-motion:reduce)'),'Animações devem respeitar acessibilidade');
+console.log('Bivvo 11.57: gráficos de Empresa e Casal interativos, animados e com drill-down.');

@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const server=fs.readFileSync('netlify/functions/assistant.js','utf8');
+const client=fs.readFileSync('js/assistant.js','utf8');
+const view=fs.readFileSync('js/views/assistant.js','utf8');
+const plans=fs.readFileSync('js/plans.js','utf8');
+const landing=fs.readFileSync('index.html','utf8');
+const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+
+assert.match(pkg.version,/^\d+\.\d+\.\d+$/);
+assert(fs.readFileSync('js/util.js','utf8').includes(`VERSION = '${pkg.version}'`));
+assert(server.includes('PADRÃO MÍNIMO DE QUALIDADE PARA TODOS OS PLANOS'));
+assert(server.includes('Toda resposta deve ser completa, bem elaborada e autossuficiente'));
+assert(server.includes('Mesmo no nível mais básico, entregue contexto, justificativa e próximos passos'));
+assert(server.includes('minWords:220'));
+assert(server.includes('minWords:360'));
+assert(server.includes('thinkingBudget:384'));
+assert(server.includes('thinkingBudget:4200'));
+assert(server.includes('thinkingConfig:{thinkingBudget:level.thinkingBudget}'));
+assert(server.includes("filter(m=>!/-lite"),'modelos lite devem ser filtrados');
+assert(!/gemini-2\.5-flash-lite/.test(server),'não deve haver fallback lite');
+assert(client.includes('export function elaborateLocalAnswer'));
+assert(client.includes('Leitura do cenário:'));
+assert(client.includes('Por que isso importa:'));
+assert(client.includes('Próximo passo:'));
+assert(view.includes('elaborateLocalAnswer(local,tools)'));
+assert(plans.includes("Análises completas, claras e práticas"));
+assert(landing.includes('Todas as IAs entregam respostas completas e bem elaboradas.'));
+for(const text of ['IA Essencial completa','IA Contextual completa','IA Avançada completa','IA Especialista completa','IA Máxima completa']) assert(landing.includes(text),text);
+console.log('Bivvo 11.49: todas as IAs têm padrão completo; planos superiores ampliam raciocínio, contexto e estratégia.');

@@ -1,0 +1,5 @@
+.privacy-panel{position:fixed;z-index:10000;bottom:54px;left:12px;right:12px;max-width:660px;margin:auto;padding:18px;background:#fff;color:#252033;border:1px solid #ccc;border-radius:16px;box-shadow:0 8px 40px #0003;font:14px/1.5 system-ui;max-height:75vh;overflow:auto}.privacy-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.privacy-actions button,.privacy-settings{font:inherit;padding:10px 12px;border:1px solid #67518a;border-radius:10px;background:#fff;color:#442d65;cursor:pointer}.privacy-actions button:focus-visible,.privacy-settings:focus-visible{outline:3px solid #bba1df;outline-offset:3px}.scan-preview{display:block;width:100%;max-height:340px;object-fit:contain;border-radius:12px;background:#eee;margin-bottom:14px}.scan-field-review{border:2px solid #926315!important;background:#fff9e9!important}
+
+.privacy-document{font:16px/1.6 system-ui;color:#252033;background:#faf9fc;margin:0;padding:24px}.privacy-document main{max-width:760px;margin:auto}.privacy-document h2{margin-top:28px}.privacy-document a{color:#58327c}
+
+

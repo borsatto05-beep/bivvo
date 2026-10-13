@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const family=readFileSync('js/views/family.js','utf8');
+const you=readFileSync('js/views/you.js','utf8');
+for(const cat of ['Moradia','Mercado','Alimentação / delivery','Energia','Filhos','Pets','Lazer a dois','Viagens','Compras para casa','Dívidas do casal','Objetivos do casal']) assert(family.includes(`'${cat}'`),`missing couple expense category: ${cat}`);
+for(const cat of ['Salários / rendas','Renda extra','Benefícios','Reembolso','Rendimentos']) assert(family.includes(`'${cat}'`),`missing couple income category: ${cat}`);
+for(const feature of ['Renda conjunta','Gastos em comum','Saldo do mês','Comprometimento','Quem colocou e quem pagou','Se vocês dividirem 50/50','Se dividirem proporcional à renda','PRÓXIMOS 30 DIAS']) assert(family.includes(feature),`missing couple dashboard feature: ${feature}`);
+assert(family.includes('Trazer do meu pessoal'));
+assert(family.includes('O que é pessoal continua pessoal'));
+assert(you.includes('Configurações do Casal'));
+assert(you.includes('Privacidade entre vocês'));
+assert(you.includes('Categorias do casal'));
+console.log('Couple mode has dedicated categories, joint KPIs, payer balance, privacy and couple-specific settings.');

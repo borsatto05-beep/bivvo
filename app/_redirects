@@ -1,0 +1,4 @@
+# 11.32.2 — somente alias legado. Não redirecionar /pagina -> /pagina/:
+# o Netlify resolve diretórios físicos automaticamente e regras duplicadas podem criar loop.
+/como-organizar-salario-curto /como-organizar-salario-que-nao-da/ 301
+/como-organizar-salario-curto/ /como-organizar-salario-que-nao-da/ 301

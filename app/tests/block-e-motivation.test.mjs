@@ -1,0 +1,12 @@
+import { motivationAnalysis } from '../js/copilot.js';
+import * as store from '../js/store.js';
+let pass=0,fail=0; const ok=(n,v)=>{if(v){console.log('  ✓ '+n);pass++;}else{console.error('  ✗ '+n);fail++;}};
+const before=JSON.stringify(store.getState()); const m=motivationAnalysis();
+ok('score fica entre 0 e 100',m.score>=0&&m.score<=100);
+ok('score tem cinco fatores explicáveis',m.factors.length===5&&m.factors.every(x=>x.why&&x.action));
+ok('cada fator respeita seu máximo',m.factors.every(x=>x.points>=0&&x.points<=x.max));
+ok('vitórias possuem evidência textual',m.victories.every(x=>x.title&&x.detail));
+ok('sequências nunca têm contagem negativa',m.streaks.every(x=>x.count>0));
+ok('alvo de melhoria não passa de 100',m.target<=100&&m.target>=m.score);
+ok('análise não altera estado',JSON.stringify(store.getState())===before);
+console.log(`\n${pass} passaram, ${fail} falharam`); if(fail) process.exit(1);

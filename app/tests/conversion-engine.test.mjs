@@ -1,0 +1,16 @@
+import fs from 'node:fs/promises';
+const mem=()=>{const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)}};
+globalThis.localStorage=mem(); globalThis.sessionStorage=mem();
+const src=await fs.readFile(new URL('../js/conversion-engine.js',import.meta.url),'utf8');
+const mod=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+let ok=0; const t=(name,cond)=>{if(!cond)throw new Error(name);console.log('  ✓ '+name);ok++};
+let a=mod.getConversionOffer({feature:'assistant',explicit:false,currentPlan:'free'});t('oferta contextual recomenda Pro',a.shouldShow&&a.recommendedPlan==='pro');
+mod.markConversionShown(a);let b=mod.getConversionOffer({feature:'forecast30',explicit:false,currentPlan:'free'});t('frequency cap bloqueia segunda sugestão automática na sessão',!b.shouldShow);
+let c=mod.getConversionOffer({feature:'forecast30',explicit:true,currentPlan:'free'});t('ação explícita ignora frequency cap',c.shouldShow&&c.recommendedPlan==='plus');
+mod.markConversionClosed(c);let d=mod.getConversionOffer({feature:'forecast30',explicit:false,currentPlan:'free'});t('fechamento mantém sugestão automática bloqueada',!d.shouldShow);
+let e=mod.getConversionOffer({feature:'family',explicit:true,currentPlan:'free'});t('interesse familiar recomenda Família',e.recommendedPlan==='family');
+let f=mod.getConversionOffer({feature:'couple',explicit:true,currentPlan:'pro'});t('interesse em casal recomenda o plano Casal mesmo para usuário de outro plano',f.shouldShow&&f.recommendedPlan==='couple');
+let g=mod.getConversionOffer({feature:'company',explicit:true,currentPlan:'plus'});t('interesse empresarial recomenda Empreendedor',g.recommendedPlan==='entrepreneur');
+let h=mod.getConversionOffer({feature:'loans',explicit:true,currentPlan:'plus'});t('carteira de empréstimos recomenda Capital',h.recommendedPlan==='capital');
+t('regras não usam saldo, dívida ou renda como gatilho',!JSON.stringify(mod.CONVERSION_RULES).match(/saldo|d[ií]vida|renda/i));
+console.log(`\n${ok} passaram, 0 falharam`);

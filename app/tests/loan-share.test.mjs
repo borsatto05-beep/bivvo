@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {loanShareText} from '../js/loan-share.js';
+const normalize=s=>s.replace(/\u00a0/g,' ');
+const loan={person:'Ana',principalOriginal:1000,principal:600,interestMode:'percent',interestRate:10,interestDue:25,periodicity:'monthly',due:'2026-10-19'};
+const text=normalize(loanShareText(loan));
+for(const phrase of ['Olá, Ana!','Valor emprestado: R$ 1.000,00','10% (ao mês)','Valor emprestado restante: R$ 600,00','Juros a pagar: R$ 25,00','Total a pagar: R$ 625,00','19/10/2026'])assert(text.includes(phrase),phrase);
+assert(normalize(loanShareText({...loan,interestMode:'fixed',interestFixed:50,interestDue:undefined})).includes('Total a pagar: R$ 650,00'));
+assert(normalize(loanShareText({...loan,interestDue:undefined})).includes('Juros a pagar: R$ 60,00'));
+assert(loanShareText({...loan,principal:0,interestDue:0,status:'paid'}).includes('Empréstimo quitado.'));
+assert(loanShareText({...loan,due:''}).includes('Vencimento: Não informado'));
+console.log('Original principal, remaining balances, fixed/rate interest and due dates verified.');

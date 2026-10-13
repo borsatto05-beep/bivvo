@@ -1,0 +1,1 @@
+{"datasetType":"synthetic-example-not-real-photo-validation","items":[{"id":"total-vs-subtotal","value":47.5,"scenario":"Subtotal 50, desconto 2.50, total 47.50"},{"id":"card-installment","value":1200,"scenario":"Compra total 1200, 12 parcelas de 100"},{"id":"blurred","value":null,"scenario":"Total ilegível; exigir preenchimento manual"}]}

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {installmentTerms,installmentSchedule,payInstallment} from '../js/loan-installments.js';
+import {recalculateLoan} from '../js/loan-ledger.js';
+import {loanShareText} from '../js/loan-share.js';
+import {today,round2} from '../js/util.js';
+import {mergePayload} from '../js/sync-merge.js';
+const terms=installmentTerms(4000,8000,10,'2026-01-31'),l={id:'l',person:'Cliente',principalOriginal:4000,principal:4000,interestFixed:4000,interestDue:4000,interestMode:'fixed',periodicity:'single',due:terms.firstDue,installmentPlan:terms};
+const s={loans:[l],loanPayments:[],loanCycles:[{id:'c',loanId:'l',type:'created',principal:4000,interest:4000,due:terms.firstDue}],transactions:[],deletedRecords:{}};
+let rows=installmentSchedule(l,s.loanPayments);assert.equal(rows.length,10);assert(rows.every(x=>x.amount===800&&x.principal===400&&x.interest===400));assert.equal(rows[1].due,'2026-02-28');assert.equal(rows[2].due,'2026-03-31');
+const base=structuredClone(s),remote=structuredClone(s);const pid=payInstallment(s,'l',1,today());payInstallment(remote,'l',1,today());const merged=mergePayload(remote,s,new Set(),base);assert.equal(merged.loanPayments.length,1);assert.equal(merged.transactions.length,2);
+assert.equal(l.principal,3600);assert.equal(l.interestDue,3600);assert.equal(l.due,'2026-02-28');assert.throws(()=>payInstallment(s,'l',1));
+assert.match(loanShareText(l,s.loanPayments),/Pagas: 1\/10/);assert.match(loanShareText(l,s.loanPayments),/7\.200,00/);
+s.loanPayments=[];s.transactions=[];s.deletedRecords[pid]=today();recalculateLoan(s,'l');assert.equal(l.principal,4000);assert.equal(l.due,'2026-01-31');const newId=payInstallment(s,'l',1,today());assert.notEqual(newId,pid);
+for(let n=2;n<=10;n++)payInstallment(s,'l',n,today());assert.equal(l.status,'paid');assert.equal(l.principal,0);assert.equal(l.interestDue,0);assert.equal(s.transactions.filter(t=>t.transactionRole==='loan_interest_income').reduce((n,t)=>n+t.value,0),4000);
+const awkward={id:'a',principalOriginal:123.45,installmentPlan:installmentTerms(123.45,237.89,7,today())};rows=installmentSchedule(awkward);assert.equal(round2(rows.reduce((n,x)=>n+x.amount,0)),237.89);assert.equal(round2(rows.reduce((n,x)=>n+x.principal,0)),123.45);assert.equal(round2(rows.reduce((n,x)=>n+x.interest,0)),114.44);
+assert.throws(()=>installmentTerms(4000,3000,10,today()));assert.throws(()=>installmentTerms(4,8,1,today()));assert.throws(()=>installmentTerms(4,8,10,'2026-02-31'));
+console.log('Parcelamento: valores exatos, vencimentos, marcar/desfazer, quitação, compartilhamento e pagamento concorrente.');

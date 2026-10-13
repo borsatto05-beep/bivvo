@@ -1,0 +1,66 @@
+{
+  "name": "Bivvo — do aperto ao controle",
+  "short_name": "Bivvo",
+  "id": "./",
+  "start_url": "./#/inicio",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F3F7",
+  "theme_color": "#F4F3F7",
+  "lang": "pt-BR",
+  "description": "Organize o salário, priorize contas, saia das dívidas e avance do aperto para a estabilidade financeira.",
+  "categories": [
+    "finance",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Anotar gasto",
+      "url": "./#/inicio?capture=1"
+    },
+    {
+      "name": "Posso comprar?",
+      "url": "./#/inicio?simular=1"
+    },
+    {
+      "name": "Extrato",
+      "url": "./#/extrato"
+    }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "receipt",
+          "accept": [
+            "image/*"
+          ]
+        }
+      ]
+    }
+  }
+}

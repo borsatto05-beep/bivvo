@@ -1,0 +1,275 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Aliases publicos/SEO — mantem links antigos e amigaveis funcionando
+# 11.16 — uma URL só para "quanto posso gastar": a canônica é /quanto-posso-gastar-hoje/
+[[redirects]]
+  from = "/quanto-posso-gastar"
+  to = "/quanto-posso-gastar-hoje/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/quanto-posso-gastar/*"
+  to = "/quanto-posso-gastar-hoje/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/como-organizar-cartao-de-credito/*"
+  to = "/organizar-cartao-de-credito/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/calculadora-reserva-emergencia/*"
+  to = "/calculadoras/reserva-de-emergencia/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/calculadora-comprometimento-renda/*"
+  to = "/calculadoras/comprometimento-de-renda/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/calculadora-parcelas/*"
+  to = "/calculadoras/parcelas/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/quanto-guardar-por-mes/*"
+  to = "/calculadoras/quanto-guardar-por-mes/:splat"
+  status = 301
+  force = true
+
+
+
+
+# 11.32.1 — aliases SEO Ideia 2 (evita 404 em URLs divulgadas)
+[[redirects]]
+  from = "/como-organizar-salario-curto"
+  to = "/como-organizar-salario-que-nao-da/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/como-organizar-salario-curto/"
+  to = "/como-organizar-salario-que-nao-da/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/api/family"
+  to = "/.netlify/functions/family"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/quote"
+  to = "/.netlify/functions/quote"
+  status = 200
+  force = true
+
+
+[[redirects]]
+  from = "/api/account-delete"
+  to = "/.netlify/functions/account-delete"
+  status = 200
+  force = true
+
+
+[[redirects]]
+  from = "/api/b3-assets"
+  to = "/.netlify/functions/b3-assets"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/assistant"
+  to = "/.netlify/functions/assistant"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/scan-receipt"
+  to = "/.netlify/functions/scan-receipt"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/quick-capture-usage"
+  to = "/.netlify/functions/quick-capture-usage"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/referral-activate"
+  to = "/.netlify/functions/referral-activate"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/push-key"
+  to = "/.netlify/functions/push-key"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/push-test"
+  to = "/.netlify/functions/push-test"
+  status = 200
+  force = true
+
+
+[[redirects]]
+  from = "/api/admin"
+  to = "/.netlify/functions/admin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/analytics/event"
+  to = "/.netlify/functions/analytics-event"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/create"
+  to = "/.netlify/functions/billing-create"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/sync"
+  to = "/.netlify/functions/billing-sync"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/pause"
+  to = "/.netlify/functions/billing-pause"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/reactivate"
+  to = "/.netlify/functions/billing-reactivate"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/cancel"
+  to = "/.netlify/functions/billing-cancel"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/trial/start"
+  to = "/.netlify/functions/trial-start"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/test-plan"
+  to = "/.netlify/functions/test-plan"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/permanent-grant"
+  to = "/.netlify/functions/permanent-grant"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/billing/webhook"
+  to = "/.netlify/functions/billing-webhook"
+  status = 200
+  force = true
+
+[functions]
+  included_files = ["netlify/lib/**"]
+
+# Avisos: roda a cada hora e envia no horário escolhido por cada pessoa.
+[functions."push-cron"]
+  schedule = "0 * * * *"
+
+# Reconcilia assinaturas do Mercado Pago a cada hora.
+[functions."billing-cron"]
+  schedule = "17 * * * *"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), microphone=(self), geolocation=(), payment=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rGBb0uEgmEkW2usZA0PHIIq09uBxuM9C4oDrG7jEqUk=' 'sha256-U5Nxub4vXU8lev8puCvQPqhUm9aNkrXeLBNdwO68XwU=' 'sha256-fvnlkgd6s0WidiWzd+qoWD1zgcJ/QnTEtHnfxEnpZmY=' 'sha256-zV4SR5nX1eTM8a34rFSP8OdxVL8tVWOSE/cN2E8Knl4=' 'sha256-mTJ4cJaTm2Gw995gXePZdVfEYYgbh6FZu1bwcNE7Q1Y=' https://cdn.jsdelivr.net https://analytics.tiktok.com https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://ad.doubleclick.net; script-src-attr 'none'; style-src 'self' 'sha256-ti+3uTLCm2PTeuT2PIaIt1HWU52Pn4+bliwh6wz9b+s='; style-src-attr 'none'; img-src 'self' data: blob: https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://www.google.com.br https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://ad.doubleclick.net; font-src 'self'; connect-src 'self' https://cdn.jsdelivr.net https://gqfirbhzjuzspermyvfy.supabase.co wss://gqfirbhzjuzspermyvfy.supabase.co https://analytics.tiktok.com https://*.tiktok.com https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://www.google.com.br https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://ad.doubleclick.net; frame-src 'self' https://www.google.com https://googleads.g.doubleclick.net https://ad.doubleclick.net; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+
+# 11.42: /ferramentas/ virou hub público. Apenas o gerador interno de chaves continua fora do índice.
+[[headers]]
+  for = "/ferramentas/chaves-push*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+# Widgets públicos: não indexar a moldura e permitir incorporação externa.
+# O conteúdo do widget não recebe sessão, não aceita valores na URL e usa somente tool em allowlist.
+[[headers]]
+  for = "/ferramentas/embed/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = ""
+    Content-Security-Policy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors https: http:; form-action 'self'; script-src 'self'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self';"
+
+[[headers]]
+  for = "/_seo/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/tests/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/js/*.mjs"
+  [headers.values]
+    Content-Type = "text/javascript; charset=utf-8"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[redirects]]
+  from = "/api/tiktok-event"
+  to = "/.netlify/functions/tiktok-event"
+  status = 200
+  force = true

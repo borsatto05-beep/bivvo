@@ -1,0 +1,28 @@
+BIVVO PREMIUM — VERIFICAÇÃO COMPLETA
+Data: 04/10/2026
+
+Resultado: APROVADO para teste/deploy.
+
+Verificado:
+- Integridade do pacote ZIP
+- Sintaxe de todos os JavaScript de js/ e netlify/
+- Imports JavaScript relativos
+- Referências locais principais do index.html
+- manifest.webmanifest
+- Balanceamento estrutural do app.css
+- Cadastro com Nome completo e Telefone/WhatsApp
+- Navegação Admin desktop/mobile
+- Captura rápida com microfone + câmera + Salvar
+- Scanner Gemini sem responseSchema incompatível
+- Rotas e funções Netlify
+- CSP mantida sem unsafe-inline
+- Nenhum segredo óbvio gravado diretamente nos arquivos
+- prefers-reduced-motion preservado
+
+Correções aplicadas durante a auditoria:
+1. Restaurado CSS que oculta Nome/Telefone no login e mostra somente no cadastro.
+2. Restaurado layout de 6 itens da barra mobile quando Admin está habilitado.
+3. Removida a pasta .netlify do pacote distribuível. Ela contém artefatos de build e será recriada pelo Netlify CLI; não faz parte do código-fonte necessário.
+
+Observação:
+Validação estática não substitui teste real dos serviços externos (Supabase, Mercado Pago, Gemini e Web Push), pois eles dependem das variáveis de ambiente e serviços da conta Netlify. Nenhuma chave secreta foi adicionada ao pacote.

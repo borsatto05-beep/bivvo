@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const root=path.resolve(new URL('..',import.meta.url).pathname);
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const life=read('js/views/life-education.js'),main=read('js/main.js'),index=read('index.html');
+let pass=0,fail=0;const t=(n,ok)=>{if(ok){console.log('✓',n);pass++;}else{console.error('✗',n);fail++;}};
+t('módulo didático pessoal/casal existe',/const PERSONAL=/.test(life)&&/const COUPLE=/.test(life));
+t('pessoal ensina orçamento, reserva, cartão e dívidas',/budget:/.test(life)&&/emergency:/.test(life)&&/cards:/.test(life)&&/debt:/.test(life));
+t('casal ensina divisão, orçamento, reserva e comunicação',/split:/.test(life)&&/houseBudget:/.test(life)&&/reserve:/.test(life)&&/communication:/.test(life));
+t('popups têm o que é, importância, cálculo, exemplo, erro e jeito certo',/Por que isso importa/.test(life)&&/Como calcular/.test(life)&&/Exemplo/.test(life)&&/Erro comum/.test(life)&&/Jeito certo de fazer/.test(life));
+t('simuladores pessoal e casal existem',/Simulador de reserva/.test(life)&&/Simulador de divisão do casal/.test(life)&&/Simulador de meta conjunta/.test(life));
+t('main injeta tutor conforme perfil',/profilePageTutor\(financeMode,name,params\)/.test(main));
+t('CSS didático carregado',/life-education\.css\?v=11\.84\.0/.test(index));
+console.log(`\n${pass}/${pass+fail} testes passaram`);if(fail)process.exit(1);

@@ -1,0 +1,14 @@
+.bivvo-install-sheet{position:fixed;inset:auto 12px 12px;z-index:12000;display:none;max-width:520px;margin:0 auto;padding:14px;background:rgba(18,7,31,.97);border:1px solid rgba(205,95,255,.35);border-radius:22px;box-shadow:0 22px 70px rgba(0,0,0,.46);color:#fff;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.bivvo-install-sheet.is-open{display:block;animation:bivvoInstallUp .28s ease-out both}
+.bivvo-install-head{display:flex;gap:12px;align-items:center}.bivvo-install-icon{width:58px;height:58px;border-radius:16px;object-fit:cover;box-shadow:0 0 24px rgba(230,54,255,.28)}
+.bivvo-install-copy{min-width:0;flex:1}.bivvo-install-copy strong{display:block;font-size:17px;line-height:1.18}.bivvo-install-copy span{display:block;margin-top:4px;color:#cec5d7;font-size:13px;line-height:1.35}
+.bivvo-install-close{align-self:flex-start;border:0;background:rgba(255,255,255,.08);color:#fff;width:34px;height:34px;border-radius:50%;font-size:19px;cursor:pointer}
+.bivvo-install-actions{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:13px}.bivvo-install-download,.bivvo-install-web{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:14px;font-weight:800;text-decoration:none;border:0;cursor:pointer}.bivvo-install-download{background:linear-gradient(90deg,#8b2cff,#f526ad);color:#fff;padding:0 18px}.bivvo-install-web{background:rgba(255,255,255,.08);color:#fff;padding:0 15px;border:1px solid rgba(255,255,255,.1)}
+.bivvo-install-note{margin:9px 2px 0;color:#9f95aa;font-size:11px;line-height:1.35}.bivvo-install-hero{display:none;margin:14px 0 0;align-items:center;gap:10px}.bivvo-install-hero img{width:44px;height:44px;border-radius:12px;object-fit:cover}.bivvo-install-hero .bivvo-install-download{min-height:44px;flex:1;font-size:14px}
+@media(max-width:760px){.bivvo-install-hero{display:flex}.bivvo-install-sheet{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));padding:13px}.bivvo-install-actions{grid-template-columns:1fr}.bivvo-install-web{min-height:44px}}
+@media(min-width:761px){.bivvo-install-sheet{left:auto;right:22px;bottom:22px;width:420px}}
+@keyframes bivvoInstallUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+
+.bivvo-install-sheet[data-platform="ios"] .bivvo-install-actions{grid-template-columns:1fr}
+.bivvo-install-sheet[data-platform="ios"] .bivvo-install-web-primary{background:linear-gradient(90deg,#8b2cff,#f526ad);border-color:transparent;min-height:48px;font-weight:900}
+.bivvo-install-sheet[data-platform="ios"] .bivvo-install-note{color:#b9afc4}

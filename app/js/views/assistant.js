@@ -1,5 +1,6 @@
 /* Bivvo 11.49 — tela do Bivvo IA: respostas completas em todos os planos. */
 import { h } from '../util.js';
+import { assistantMessage } from './assistant-message.js';
 import { canUseFeature, getAiLevel } from '../plans.js';
 import { openPaywall } from './pro.js';
 import { toast } from '../ui.js';
@@ -27,8 +28,7 @@ export function renderAssistant(root) {
   const input=h('textarea.ai-input',{rows:3,maxlength:500,placeholder:'Ex.: Estou apertado. Por onde começo? Ou: tenho sobra, como começo a investir?'});
   const send=h('button.btn.primary',{type:'button'},'Perguntar');
   const add=(who,title,text)=>{
-    const box=h('div.ai-msg.'+who, title?h('b',title):null);
-    String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).forEach(line=>box.append(h('p',line)));
+    const box=assistantMessage(who,title,text);
     chat.append(box);
   };
   add('bot',crisis?'Plano de recuperação':'Bivvo IA',welcome(tools,crisis));
@@ -47,7 +47,7 @@ export function renderAssistant(root) {
     finally{send.disabled=false;send.textContent='Perguntar';}
   };
   send.onclick=()=>run(input.value); input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();run(input.value);}});
-  const quick=['Crie meu planejamento completo passo a passo',...suggestedQuestions(tools)];
+  const quick=['Montar meu plano passo a passo',...suggestedQuestions(tools)];
   root.append(h('section.card.ai-ray', h('div.card-head',h('h3','Raio-X financeiro'),h('span.muted.sm',tools.direction?.stageLabel||'Agora')), h('div.ai-ray-list',rayX(tools).map(x=>h('p',x)))));
   root.append(h('section.card.ai-box', chat, h('div.ai-quick',quick.map(q=>h('button.chip',{type:'button',onclick:()=>run(q)},q))), h('div.ai-compose',input,send), h('p.hint',`Perguntas ao Gemini: ${usage.remaining === Infinity ? 'sem limite' : usage.remaining+' restantes neste mês'}. Análises internas são feitas no aparelho e não gastam cota do Gemini.`)));
 }

@@ -44,12 +44,14 @@ exports.handler = async event => {
 
   const plan = String(body.plan || '');
   const interval = body.interval === 'annual' ? 'annual' : 'monthly';
-  const def = PLANS[plan];
+  const def = Object.hasOwn(PLANS, plan) ? PLANS[plan] : null;
 
   if (!def) {
     return out(400, { error: 'Plano inválido.' });
   }
 
+  let stage = 'provider';
+  let subscriptionId = null;
   try {
     const base = process.env.URL || 'https://maisbivvo.netlify.app';
     const external = `bivvo:${user.id}:${plan}:${interval}`;
@@ -81,7 +83,9 @@ exports.handler = async event => {
       throw new Error('Mercado Pago não devolveu o checkout.');
     }
 
-    await rest('billing_subscriptions', {
+    subscriptionId = String(sub.id);
+    stage = 'storage';
+    await rest('billing_subscriptions?on_conflict=mp_subscription_id', {
       method: 'POST',
       body: {
         user_id: user.id,
@@ -102,10 +106,29 @@ exports.handler = async event => {
     });
 
   } catch (e) {
-    console.error('billing-create', e.message);
+    console.error('billing-create', { stage, message: e.message });
+    // Never leave a payable checkout orphaned when its local record failed.
+    if (stage === 'storage' && subscriptionId) {
+      try {
+        await mp('/preapproval/' + encodeURIComponent(subscriptionId), {
+          method: 'PUT', body: { status: 'cancelled' }
+        });
+      } catch (cleanupError) {
+        console.error('billing-create cleanup failed', { subscriptionId, message: cleanupError.message });
+      }
+    }
+    const schemaMismatch = stage === 'storage' &&
+      /23514|billing_subscriptions_plan_check|check constraint/i.test(e.message);
+    const code = schemaMismatch ? 'BILLING_SCHEMA_OUTDATED' :
+      stage === 'storage' ? 'BILLING_STORAGE_FAILED' : 'BILLING_PROVIDER_FAILED';
 
     return out(502, {
-      error: 'Não consegui abrir o pagamento agora. Tente novamente.',
+      code,
+      error: schemaMismatch
+        ? 'O cadastro de planos precisa ser atualizado no servidor. Contate o suporte.'
+        : stage === 'storage'
+          ? 'Não foi possível registrar a assinatura. Tente novamente em alguns minutos.'
+          : 'Não foi possível abrir o pagamento no Mercado Pago. Tente novamente em alguns minutos.',
       detail: process.env.CONTEXT === 'dev' ? e.message : undefined
     });
   }

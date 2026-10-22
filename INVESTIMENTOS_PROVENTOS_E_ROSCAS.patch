@@ -1,0 +1,225 @@
+--- a/bivvo_1139/js/views/forms.js
++++ b/bivvo_1139/js/views/forms.js
+@@ -461,6 +461,7 @@
+ export function openInvestmentForm(inv) {
+   const st = { type: inv?.type || 'CDB' };
+   const name = h('input.input', { value: inv?.name || '', maxLength: 40, placeholder: 'Ex.: PETR4, CDB Inter, Tesouro Selic', autocomplete: 'off' });
++  const sectorInput=h('input.input',{value:inv?.sector||'',maxLength:60,placeholder:'Ex.: Saúde, Bancos, Energia','aria-label':'Setor do investimento'});
+   const sugg = h('div.chips.scroll.sugg');
+   const qty = h('input.input', { type: 'text', inputmode: 'decimal', value: inv?.quantity || '', placeholder: 'Ex.: 10' });
+   const price = moneyInput(inv?.purchasePrice, { label: 'Preço pago por cota' });
+@@ -497,7 +498,7 @@
+     catch (e) { quoteMsg.textContent = e.message; delete quoteMsg.dataset.price; }
+   }
+   const msg = h('p.form-msg', { role: 'alert' });
+-  const form = h('form.form', { onsubmit: e => { e.preventDefault(); save(); } }, h('div.field', h('span', 'Tipo'), seg), market, fixedInc, plain, valueField, field('Data da aplicação', date), inv ? null : fromBalance, msg, h('button.hidden-submit', { type: 'submit', tabindex: '-1', 'aria-hidden': 'true' }));
++  const form = h('form.form', { onsubmit: e => { e.preventDefault(); save(); } }, h('div.field', h('span', 'Tipo'), seg), market, fixedInc, plain, valueField, field('Setor (opcional)', sectorInput), field('Data da aplicação', date), inv ? null : fromBalance, msg, h('button.hidden-submit', { type: 'submit', tabindex: '-1', 'aria-hidden': 'true' }));
+   const footer = [];
+   if (inv) footer.push(h('button.btn.ghost.danger-text', { type: 'button', onclick: () => removeInv() }, 'Resgatar / excluir'));
+   footer.push(h('button.btn.primary', { type: 'button', onclick: () => form.requestSubmit() }, inv ? 'Salvar' : 'Registrar aplicação'));
+@@ -511,7 +512,7 @@
+     if (!(cost > 0)) { msg.textContent = isMarket ? 'Informe quantidade e preço pago.' : 'Informe o valor aplicado.'; return; }
+     store.commit(s => {
+       const base = inv ? s.investments.find(x => x.id === inv.id) : { id: uid() };
+-      Object.assign(base, { type: t, name: nm, value: cost, costBasis: cost, purchaseDate: date.value || today() });
++      Object.assign(base, { type: t, name: nm, sector: sectorInput.value.trim(), value: cost, costBasis: cost, purchaseDate: date.value || today() });
+       if (isMarket) Object.assign(base, { quantity: q, purchasePrice: p, marketPrice: num(quoteMsg.dataset.price) || base.marketPrice || p });
+       else { delete base.quantity; delete base.purchasePrice; delete base.marketPrice; }
+       if (isFixed) Object.assign(base, { yieldType: yieldType.value, yieldRate: parseMoney(rate.value), yieldIndex: index.value }); else { delete base.yieldRate; }
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -9,7 +9,7 @@
+ import { monthSwitcher } from './extrato.js';
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
+-import { donut } from '../charts.js';
++import { investmentCharts } from './investment-charts.js';
+ import { budgetReport } from './budget-report.js';
+ 
+ let tab = 'orcamento';
+@@ -131,7 +131,7 @@
+   const s = store.getState(), w = F.wealth(s);
+   root.append(h('div.page-head', h('h2.h2', 'Dinheiro guardado'), h('button.btn.sm.primary', { type: 'button', onclick: () => openInvestmentForm() }, 'Nova aplicação')));
+   root.append(h('div.stats.card.flat', stat('Investido hoje', money0(w.investments)), stat('Resultado', (w.result >= 0 ? '+' : '') + money0(w.result), null, w.result >= 0 ? 'in' : 'neg'), stat('Em metas', money0(w.goals))));
+-  if (!s.investments.length) { root.append(emptyState({ icon: '💎', title: 'Nenhuma aplicação registrada', text: 'Registre CDBs, Tesouro, ações e fundos para acompanhar o patrimônio junto com o resto das suas finanças.', action: { label: 'Registrar aplicação', fn: () => openInvestmentForm() } })); return; }
++  if (!s.investments.length) { root.append(investmentCharts(s, [], ()=>{})); root.append(emptyState({ icon: '💎', title: 'Nenhuma aplicação registrada', text: 'Registre CDBs, Tesouro, ações e fundos para acompanhar o patrimônio junto com o resto das suas finanças.', action: { label: 'Registrar aplicação', fn: () => openInvestmentForm() } })); return; }
+   // Carteira por ativo: cada ticker/aplicação recebe sua própria fatia. Ativos com o mesmo nome são somados.
+   const byAsset = new Map();
+   for (const x of s.investments) {
+@@ -163,14 +163,10 @@
+       ),
+       h('p.hint', group.length > 1 ? `${group.length} registros de ${picked.label} foram somados nesta fatia.` : 'Toque em editar para alterar os dados deste investimento.')
+     );
+-    const footer = group.length === 1 ? [h('button.btn.primary', { type: 'button', onclick: () => { sheet.close(); openInvestmentForm(group[0]); } }, 'Editar investimento')] : null;
++    const footer = group.length === 1 ? [h('button.btn.primary', { type: 'button', onclick: () => { sheet.close(); setTimeout(()=>openInvestmentForm(group[0]),240); } }, 'Editar investimento')] : null;
+     const sheet = openSheet({ title: 'Detalhes do ativo', subtitle: picked.label, content: details, footer });
+   };
+-  root.append(h('section.card.asset-allocation-card',
+-    h('div.card-head', h('div', h('h3', 'Carteira por ativo'), h('p.hint', 'Cada fatia representa um ativo. Toque no gráfico ou na legenda para ver os detalhes.'))),
+-    donut(assets, { center: 'Carteira', onPick: showAsset }),
+-    h('div.asset-pie-legend', assets.map((x, i) => h('button', { type: 'button', onclick: () => showAsset(x), 'aria-label': `Abrir detalhes de ${x.label}` }, h('i', { class: `v${i % 6}` }), h('span', x.label), h('b', `${(x.value / assetTotal * 100).toFixed(1).replace('.', ',')}%`), h('small', money0(x.value)))))
+-  ));
++  root.append(investmentCharts(s, assets, showAsset));
+   const cdi = h('input.input.sm.pct-input', { type: 'text', inputmode: 'decimal', value: String(s.cdiReference).replace('.', ','), 'aria-label': 'CDI de referência ao ano' });
+   cdi.addEventListener('change', () => { const v = parseMoney(cdi.value); if (v > 0 && v < 50) { store.commit(st => { st.cdiReference = v; }); toast('CDI de referência atualizado'); } });
+   root.append(h('section.card', h('div.card-head', h('h3', 'Carteira'), h('button.link.sm', { type: 'button', onclick: refreshQuotes }, 'Atualizar cotações')),
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1309,3 +1309,32 @@
+ .month-origin-section h3{font-size:.95rem}
+ .month-origin-equation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:10px;background:var(--sunk)}
+ .month-origin-equation b{white-space:nowrap}
++
++/* Investimentos: proventos e composição em roscas. */
++.invest-chart-controls{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
++.invest-chart-controls select{width:auto;min-width:130px;flex:1}
++.dividend-summary{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0;font-size:.85rem}
++.dividend-summary span{color:var(--ink-2)}.dividend-summary b{color:var(--ink);margin-left:6px}
++.dividend-key{display:flex;justify-content:center;flex-wrap:wrap;gap:18px;font-size:.73rem;color:var(--ink-2);margin:16px 0}
++.dividend-key span{display:flex;align-items:center;gap:6px}
++.dividend-key i{width:9px;height:9px;border-radius:2px;display:inline-block}
++.dividend-key .received{background:#416fce}.dividend-key .pending{background:#b4caef}
++.dividend-chart-scroll{direction:rtl;overflow-x:auto;width:100%}
++.dividend-chart-scroll>svg{direction:ltr;display:block;width:100%;min-width:620px}
++.dividend-gridline{stroke:var(--line);stroke-width:1}
++.dividend-axis{fill:var(--ink-2);font-size:11px}
++.dividend-bar{cursor:pointer}.dividend-bar:hover{opacity:.8}
++.dividend-bar:focus-visible{outline:2px solid var(--plum)}
++.invest-ring-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:20px}
++.invest-ring-grid>section{min-width:0}
++.invest-ring-grid h4{text-align:center;font-size:.95rem;margin:0 0 12px}
++.invest-ring>svg{display:block;width:min(100%,330px);margin:0 auto 16px}
++.invest-ring [role=button]{cursor:pointer}
++.invest-ring [role=button]:focus-visible{outline:none;stroke:var(--ink);stroke-width:3}
++.invest-ring-label{font-size:8.5px;font-weight:550}.invest-ring-percent{font-size:11px;font-weight:750}
++.invest-ring-legend{display:grid;gap:4px}
++.invest-ring-legend button{display:grid;grid-template-columns:9px minmax(0,1fr) auto auto;gap:8px;text-align:left;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:.78rem}
++.invest-ring-legend i{width:9px;height:9px;border-radius:50%;background:var(--slice-color)}
++.invest-ring-legend span{overflow-wrap:anywhere}.invest-ring-legend small{color:var(--ink-2);white-space:nowrap}
++.invest-allocation>.hint{margin-top:20px}
++@media(max-width:700px){.invest-ring-grid{grid-template-columns:1fr;gap:28px}.dividend-card>.card-head{flex-wrap:wrap;gap:12px}.invest-chart-controls select{min-width:120px}.invest-ring>svg{max-width:300px}.dividend-summary{gap:10px;flex-direction:column}}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-9-month-value-origin';
++const VERSION = 'bivvo-v11-41-10-investment-charts';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- /dev/null
++++ b/bivvo_1139/js/views/investment-charts.js
+@@ -0,0 +1,111 @@
++/* Proventos registrados e composição atual da carteira. */
++import { h, s as svg, money, money0, today, ymOf, addMonthsYM, monthShort, monthLabel, num, round2, uid, parseMoney, shortDate } from '../util.js';
++import * as F from '../finance.js';
++import * as store from '../store.js';
++import { openSheet, field, toast } from '../ui.js';
++
++const colors=['#07364b','#5baaa0','#9994ae','#b98183','#4a61ef','#e6ad51','#6b83a2','#899b88'];
++const percent=n=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
++const sector=x=>String(x.sector||'').trim()||'Não informado';
++const received=t=>F.isPaid(t)&&t.date<=today();
++export const dividendRows=s=>s.transactions.filter(t=>F.isRealIncome(t)&&(t.cat==='Rendimentos'||t.transactionRole==='investment_dividend')&&!F.isWithdraw(t));
++export function dividendBuckets(rows,keys,annual=false){
++  return keys.map(key=>{const items=rows.filter(t=>(annual?t.date.slice(0,4):ymOf(t.date))===key);
++    return {key,items,paid:round2(items.filter(received).reduce((a,t)=>a+num(t.value),0)),pending:round2(items.filter(t=>!received(t)).reduce((a,t)=>a+num(t.value),0))};});
++}
++function ring(items,label,onPick){
++ const rows=items.filter(x=>x.value>0),total=rows.reduce((a,x)=>a+x.value,0);
++ if(!total)return h('p.muted','Nenhum valor disponível para compor a carteira.');
++ const chart=svg('svg',{viewBox:'0 0 240 240',role:'group','aria-label':label}),legend=h('div.invest-ring-legend');
++ let angle=-Math.PI/2;
++ rows.forEach((item,i)=>{
++  const share=item.value/total,end=angle+share*2*Math.PI,mid=(angle+end)/2,color=colors[i%colors.length];
++  const point=(r,a)=>[120+r*Math.cos(a),120+r*Math.sin(a)].join(' ');
++  const d=rows.length===1
++   ?'M 120 17 A 103 103 0 1 1 120 223 A 103 103 0 1 1 120 17 M 120 67 A 53 53 0 1 0 120 173 A 53 53 0 1 0 120 67'
++   :'M '+point(103,angle)+' A 103 103 0 '+(share>.5?1:0)+' 1 '+point(103,end)+' L '+point(53,end)+' A 53 53 0 '+(share>.5?1:0)+' 0 '+point(53,angle)+' Z';
++  const description=item.label+': '+money(item.value)+' · '+percent(share),pick=()=>onPick?.({...item,share,total});
++  const path=svg('path',{d,fill:color,'fill-rule':'evenodd',stroke:'var(--surface)','stroke-width':1.4,tabindex:0,role:'button','aria-label':description});
++  path.append(svg('title',{},description));path.addEventListener('click',pick);
++  path.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});chart.append(path);
++  if(share>=.085){
++   const x=rows.length===1?120:120+(share>.5?82:78)*Math.cos(mid),y=rows.length===1?38:120+(share>.5?82:78)*Math.sin(mid);
++   const words=item.label.split(' '),lines=[];
++   for(const word of words){if(!lines.length||lines[lines.length-1].length+word.length+1>10)lines.push(word.length>11?word.slice(0,10)+'…':word);else lines[lines.length-1]+=' '+word;}
++   const shown=lines.slice(0,3);
++   const text=svg('text',{x,y:y-(shown.length-1)*5-8,'text-anchor':'middle',fill:'#fff',class:'invest-ring-label','pointer-events':'none'});
++   shown.forEach((line,j)=>text.append(svg('tspan',{x,dy:j?10:0},line)));
++   text.append(svg('tspan',{x,dy:13,class:'invest-ring-percent'},percent(share)));chart.append(text);
++  }
++  legend.append(h('button',{type:'button',onclick:pick,'aria-label':description},h('i',{vars:{'--slice-color':color},'aria-hidden':'true'}),h('span',item.label),h('b',percent(share)),h('small',money0(item.value))));
++  angle=end;
++ });
++ return h('div.invest-ring',chart,legend);
++}
++function openDividend(s){
++ const asset=h('select.input',{'aria-label':'Ativo do provento'},h('option',{value:''},'Sem vínculo com ativo'),s.investments.map(x=>h('option',{value:x.id},x.name)));
++ const amount=h('input.input',{'aria-label':'Valor do provento',inputmode:'decimal',placeholder:'0,00'});
++ const date=h('input.input',{type:'date',value:today(),'aria-label':'Data do provento'});
++ const status=h('select.input',{'aria-label':'Situação do provento'},h('option',{value:'Pago'},'Recebido'),h('option',{value:'Pendente'},'A receber'));
++ const desc=h('input.input',{value:'Proventos',maxlength:80,'aria-label':'Descrição do provento'}),msg=h('p.form-msg',{role:'alert'});
++ const form=h('form.form',{onsubmit:e=>{e.preventDefault();save();}},field('Ativo',asset),field('Valor',amount),field('Data de recebimento',date),field('Situação',status),field('Descrição',desc),h('p.hint','O provento será registrado como entrada em Rendimentos. Recebidos afetam o saldo; valores a receber ficam pendentes.'),msg);
++ const sheet=openSheet({title:'Registrar provento',content:form,footer:[h('button.btn.primary',{type:'button',onclick:()=>form.requestSubmit()},'Salvar provento')]});
++ function save(){
++  const value=parseMoney(amount.value);
++  if(!(value>0)||!date.value||!desc.value.trim()){msg.textContent='Preencha valor, data e descrição.';return;}
++  if(status.value==='Pago'&&date.value>today()){msg.textContent='Para uma data futura, escolha A receber.';return;}
++  store.commit(st=>st.transactions.push({id:uid(),type:'income',cat:'Rendimentos',transactionRole:'investment_dividend',investmentId:asset.value||undefined,value:round2(value),date:date.value,status:status.value,desc:desc.value.trim(),method:'Transferência',createdAt:Date.now()}));
++  sheet.close();toast('Provento registrado.');
++ }
++}
++export function investmentCharts(s,assets,showAsset){
++ const host=h('div.invest-charts');
++ const all=dividendRows(s),controls=h('div.invest-chart-controls');
++ const mode=h('select.input.sm',{'aria-label':'Agrupamento dos proventos'},h('option',{value:'monthly'},'Mensal'),h('option',{value:'annual'},'Anual'));
++ const period=h('select.input.sm',{'aria-label':'Período dos proventos'},h('option',{value:'year'},'Ano atual'),h('option',{value:'12'},'Últimos 12 meses'),h('option',{value:'24'},'Últimos 24 meses'));
++ const type=h('select.input.sm',{'aria-label':'Tipo de ativo dos proventos'},h('option',{value:''},'Todos os tipos'),[...new Set(s.investments.map(x=>x.type))].sort().map(x=>h('option',{value:x},x)));
++ const asset=h('select.input.sm',{'aria-label':'Filtrar ativo dos proventos'},h('option',{value:''},'Todos os ativos'),h('option',{value:'unlinked'},'Sem vínculo com ativo'),s.investments.map(x=>h('option',{value:x.id},x.name)));
++ const body=h('div.dividend-body');
++ const investmentById=new Map(s.investments.map(x=>[x.id,x]));
++ controls.append(mode,period,type,asset);
++ const chartCard=h('section.card.dividend-card',h('div.card-head',h('div',h('h3','Evolução de proventos'),h('p.hint','Recebidos e a receber, conforme seus registros.')),h('button.btn.sm',{type:'button',onclick:()=>openDividend(s)},'Registrar provento')),controls,body);
++ function draw(){
++  period.disabled=mode.value==='annual';
++  const annual=mode.value==='annual',cur=ymOf(today()),year=cur.slice(0,4);
++  const keys=annual?Array.from({length:5},(_,i)=>String(Number(year)-4+i)):period.value==='year'?Array.from({length:12},(_,i)=>year+'-'+String(i+1).padStart(2,'0')):Array.from({length:Number(period.value)},(_,i)=>addMonthsYM(cur,i-Number(period.value)+1));
++  const rows=all.filter(t=>(!type.value||investmentById.get(t.investmentId)?.type===type.value)&&(!asset.value||(asset.value==='unlinked'?!investmentById.has(t.investmentId):t.investmentId===asset.value)));
++  const buckets=dividendBuckets(rows,keys,annual),totalPaid=round2(buckets.reduce((a,x)=>a+x.paid,0)),totalPending=round2(buckets.reduce((a,x)=>a+x.pending,0));
++  const max=Math.max(1,...buckets.map(x=>x.paid+x.pending));
++  const svgChart=svg('svg',{viewBox:'0 0 900 300',role:'group','aria-label':'Proventos recebidos e a receber por '+(annual?'ano':'mês')});
++  for(let i=0;i<=4;i++){const y=245-i*52.5;svgChart.append(svg('line',{x1:65,x2:885,y1:y,y2:y,class:'dividend-gridline'}),svg('text',{x:55,y:y+4,'text-anchor':'end',class:'dividend-axis'},(max*i/4).toLocaleString('pt-BR',{notation:'compact',maximumFractionDigits:1})));}
++  const width=810/buckets.length;
++  const show=b=>openSheet({title:annual?b.key:monthLabel(b.key),subtitle:'Recebidos '+money(b.paid)+' · a receber '+money(b.pending),content:b.items.length?h('ul.category-purchase-list',b.items.map(t=>h('li',h('div',h('b',t.desc),h('small',shortDate(t.date)+' · '+(received(t)?'Recebido':'A receber'))),h('strong',money(t.value))))):h('p.muted','Nenhum provento registrado neste período.')});
++  buckets.forEach((b,i)=>{
++   const x=65+i*width+width*.17,w=width*.66,paidH=b.paid/max*210,pendingH=b.pending/max*210;
++   const g=svg('g',{role:'button',tabindex:0,'aria-label':b.key+': recebidos '+money(b.paid)+', a receber '+money(b.pending),class:'dividend-bar'});
++   g.append(svg('rect',{x,y:245-Math.max(4,paidH+pendingH),width:w,height:Math.max(4,paidH+pendingH),fill:'transparent'}));
++   if(b.paid)g.append(svg('rect',{x,y:245-paidH,width:w,height:paidH,fill:'#416fce',rx:2}));
++   if(b.pending)g.append(svg('rect',{x,y:245-paidH-pendingH,width:w,height:pendingH,fill:'#b4caef',rx:2}));
++   g.append(svg('title',{},b.key+': '+money(b.paid)+' recebidos; '+money(b.pending)+' a receber'));
++   g.addEventListener('click',()=>show(b));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(b);}});svgChart.append(g);
++   const label=annual?b.key:b.key.slice(5)+'/'+b.key.slice(2,4);
++   svgChart.append(svg('text',{x:x+w/2,y:269,'text-anchor':'middle',class:'dividend-axis'},label));
++  });
++  body.replaceChildren(h('div.dividend-summary',h('span','Recebidos ',h('b',money(totalPaid))),h('span','A receber ',h('b',money(totalPending)))),
++   h('div.dividend-key',h('span',h('i.received'),'Proventos recebidos'),h('span',h('i.pending'),'Proventos a receber')),
++   h('p.hint','Valores em R$. Deslize o gráfico para consultar todos os períodos.'),h('div.dividend-chart-scroll',svgChart),
++   totalPaid+totalPending===0?h('p.muted.sm','Nenhum provento registrado para os filtros selecionados.'):h('span',{'aria-hidden':'true'}),
++   h('p.hint',annual?'Últimos 5 anos. Toque nas barras para conferir os lançamentos.':'Toque nas barras para conferir os lançamentos.'),
++   h('p.hint','Fonte: entradas em Rendimentos e proventos identificados. Resgates e valorização dos ativos não são proventos. Entradas sem vínculo aparecem em Todos os ativos e Sem vínculo com ativo.'));
++ }
++ [mode,period,type,asset].forEach(x=>x.addEventListener('change',draw));draw();
++ host.append(chartCard);
++ const bySector=new Map();
++ for(const inv of s.investments){const label=sector(inv),row=bySector.get(label)||{label,value:0,items:[]};row.value+=F.investmentValue(inv,s);row.items.push(inv);bySector.set(label,row);}
++ const sectors=[...bySector.values()].filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
++ const showSector=picked=>openSheet({title:picked.label,subtitle:percent(picked.share)+' da carteira · '+money(picked.value),content:h('div',h('p.hint',picked.label==='Não informado'?'Edite os investimentos para informar o setor de cada ativo.':'Ativos cadastrados neste setor.'),h('div.list',picked.items.map(x=>h('button.tx',{type:'button',onclick:()=>showAsset({label:x.name,items:[x]})},h('span.tx-main',h('b',x.name),h('small',x.type)),h('b',money(F.investmentValue(x,s)))))))});
++ host.append(h('section.card.invest-allocation',h('div.card-head',h('div',h('h3','Composição da carteira'),h('p.hint','Distribuição pelo valor atual dos investimentos.'))),
++  h('div.invest-ring-grid',h('section',h('h4','Por ativo'),ring(assets,'Carteira por ativo',showAsset)),h('section',h('h4','Por setor'),ring(sectors,'Carteira por setor',showSector))),
++  h('p.hint','Toque nas fatias ou na legenda para ver os detalhes. Setores são informados no cadastro de cada investimento.')));
++ return host;
++}

@@ -1,0 +1,184 @@
+--- a/js/charts.js
++++ b/js/charts.js
+@@ -12,13 +12,13 @@
+ export function progressBar(value,max,label='Progresso'){ const pct=max?Math.min(100,Math.max(0,value/max*100)):0; return h('div.viz-progress',h('div',h('span',label),h('b',`${Math.round(pct)}%`)),h('span.viz-progress-track',h('i',{vars:{'--p':pct+'%'}}))); }
+ 
+ /* Infográfico de orçamento: fatias, chamadas externas e tabela acessível. */
+-export function pie(items, { label='Distribuição dos gastos por categoria', onPick }={}) {
++export function pie(items, { label='Distribuição dos gastos por categoria', onPick, caption='Toque nas fatias ou nos blocos para ver os detalhes. Percentuais sobre o total de gastos do mês.', groupLabel='Demais categorias' }={}) {
+   const entries=items.filter(x=>Number(x.value)>0).sort((a,b)=>b.value-a.value);
+   const total=entries.reduce((sum,x)=>sum+Number(x.value),0);
+   if(!total) return h('div.budget-pie-empty',h('b','Seu mapa de gastos começa aqui'),h('p','Nenhum gasto registrado neste mês. Os lançamentos vão preencher o gráfico automaticamente.'));
+   const palette=['#7840c4','#00876c','#e5b333','#2879c0','#d94778','#e47a36','#5862ad','#8b969d'];
+   const pct=v=>(v*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+-  const grouped=entries.length>8?[...entries.slice(0,7),{label:'Demais categorias',value:entries.slice(7).reduce((s,x)=>s+Number(x.value),0),members:entries.slice(7)}]:entries;
++  const grouped=entries.length>8?[...entries.slice(0,7),{label:groupLabel,value:entries.slice(7).reduce((s,x)=>s+Number(x.value),0),members:entries.slice(7)}]:entries;
+   const chart=svg('svg',{viewBox:'0 0 900 520',role:'group','aria-label':label,class:'budget-infographic'});
+   const calls=[];
+   let angle=-Math.PI/2;
+@@ -27,7 +27,7 @@
+     const share=Number(item.value)/total,end=angle+share*2*Math.PI,mid=(angle+end)/2,color=palette[i];
+     const pick=()=>onPick?.({...item,share,total});
+     const description=item.label+': '+money0(item.value)+' · '+pct(share);
+-    const attrs={fill:color,stroke:'var(--surface)','stroke-width':2,tabindex:'0',role:'button','aria-label':description};
++    const attrs={'data-chart-key':String(i),fill:color,stroke:'var(--surface)','stroke-width':2,tabindex:'0',role:'button','aria-label':description};
+     const slice=grouped.length===1?svg('circle',{...attrs,cx:450,cy:260,r:198}):svg('path',{...attrs,d:'M 450 260 L '+(450+198*Math.cos(angle))+' '+(260+198*Math.sin(angle))+' A 198 198 0 '+(share>.5?1:0)+' 1 '+(450+198*Math.cos(end))+' '+(260+198*Math.sin(end))+' Z'});
+     slice.append(svg('title',{},description));slice.addEventListener('click',pick);
+     slice.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});
+@@ -50,7 +50,7 @@
+       const x=right?704:12,edge=right?704:196,elbow=right?680:220;
+       chart.append(svg('polyline',{points:c.x+','+c.y+' '+elbow+','+y+' '+edge+','+y,fill:'none',stroke:c.color,'stroke-width':1.5,'stroke-dasharray':'3 3','pointer-events':'none'}),
+         svg('circle',{cx:c.x,cy:c.y,r:3.5,fill:c.color,stroke:'var(--surface)','stroke-width':2,'pointer-events':'none'}));
+-      const block=svg('g',{tabindex:'0',role:'button','aria-label':c.description,class:'budget-callout'});
++      const block=svg('g',{tabindex:'0',role:'button','aria-label':c.description,class:'budget-callout','data-chart-key':String(grouped.indexOf(c.item))});
+       block.append(svg('rect',{x,y:y-31,width:184,height:62,rx:10,fill:'var(--surface)',stroke:c.color,'stroke-width':1.5}));
+       const lines=wrap(c.item.label,23);
+       const title=svg('text',{x:x+12,y:y-9,class:'budget-callout-name'});
+@@ -67,5 +67,5 @@
+     table.append(h('button',{type:'button',onclick:()=>onPick?.({...item,share,total}),'aria-label':item.label+': '+money0(item.value)+' · '+pct(share)},
+       h('span',h('i',{'aria-hidden':'true',vars:{'--slice-color':color}}),item.label),h('b',money0(item.value)),h('small',pct(share))));
+   });
+-  return h('div.budget-pie',h('div.budget-graphic-window',chart),h('p.budget-chart-caption','Toque nas fatias ou nos blocos para ver os detalhes. Percentuais sobre o total de gastos do mês.'),table);
++  return h('div.budget-pie',h('div.budget-graphic-window',chart),h('p.budget-chart-caption',caption),table);
+ }
+--- a/js/views/investment-charts.js
++++ b/js/views/investment-charts.js
+@@ -1,3 +1,4 @@
++import { pie } from '../charts.js';
+ /* Proventos registrados e composição atual da carteira. */
+ import { h, s as svg, money, money0, today, ymOf, addMonthsYM, monthShort, monthLabel, num, round2, uid, parseMoney, shortDate } from '../util.js';
+ import * as F from '../finance.js';
+@@ -17,33 +18,10 @@
+     return {key,items,paid:round2(items.filter(received).reduce((a,t)=>a+num(t.value),0)),pending:round2(items.filter(t=>!received(t)).reduce((a,t)=>a+num(t.value),0))};});
+ }
+ function ring(items,label,onPick){
+- const rows=items.filter(x=>x.value>0),total=rows.reduce((a,x)=>a+x.value,0);
+- if(!total)return h('p.muted','Nenhum valor disponível para compor a carteira.');
+- const chart=svg('svg',{viewBox:'0 0 240 240',role:'group','aria-label':label}),legend=h('div.invest-ring-legend');
+- let angle=-Math.PI/2;
+- rows.forEach((item,i)=>{
+-  const share=item.value/total,end=angle+share*2*Math.PI,mid=(angle+end)/2,color=colors[i%colors.length];
+-  const point=(r,a)=>[120+r*Math.cos(a),120+r*Math.sin(a)].join(' ');
+-  const d=rows.length===1
+-   ?'M 120 17 A 103 103 0 1 1 120 223 A 103 103 0 1 1 120 17 M 120 67 A 53 53 0 1 0 120 173 A 53 53 0 1 0 120 67'
+-   :'M '+point(103,angle)+' A 103 103 0 '+(share>.5?1:0)+' 1 '+point(103,end)+' L '+point(53,end)+' A 53 53 0 '+(share>.5?1:0)+' 0 '+point(53,angle)+' Z';
+-  const description=item.label+': '+money(item.value)+' · '+percent(share),pick=()=>onPick?.({...item,share,total});
+-  const path=svg('path',{d,fill:color,'fill-rule':'evenodd',stroke:'var(--surface)','stroke-width':1.4,tabindex:0,role:'button','aria-label':description});
+-  path.append(svg('title',{},description));path.addEventListener('click',pick);
+-  path.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});chart.append(path);
+-  if(share>=.085){
+-   const x=rows.length===1?120:120+(share>.5?82:78)*Math.cos(mid),y=rows.length===1?38:120+(share>.5?82:78)*Math.sin(mid);
+-   const words=item.label.split(' '),lines=[];
+-   for(const word of words){if(!lines.length||lines[lines.length-1].length+word.length+1>10)lines.push(word.length>11?word.slice(0,10)+'…':word);else lines[lines.length-1]+=' '+word;}
+-   const shown=lines.slice(0,3);
+-   const text=svg('text',{x,y:y-(shown.length-1)*5-8,'text-anchor':'middle',fill:'#fff',class:'invest-ring-label','pointer-events':'none'});
+-   shown.forEach((line,j)=>text.append(svg('tspan',{x,dy:j?10:0},line)));
+-   text.append(svg('tspan',{x,dy:13,class:'invest-ring-percent'},percent(share)));chart.append(text);
+-  }
+-  legend.append(h('button',{type:'button',onclick:pick,'aria-label':description},h('i',{vars:{'--slice-color':color},'aria-hidden':'true'}),h('span',item.label),h('b',percent(share)),h('small',money0(item.value))));
+-  angle=end;
+- });
+- return h('div.invest-ring',chart,legend);
++ return pie(items,{label,groupLabel:'Demais investimentos',caption:'Toque nas fatias, nos blocos ou na tabela para consultar os investimentos. Percentuais sobre o valor atual da carteira.',onPick:picked=>{
++  if(!picked.members)return onPick?.(picked);
++  openSheet({title:picked.label,subtitle:money(picked.value)+' · '+percent(picked.share)+' da carteira',content:h('div.list',picked.members.map(item=>h('button.tx',{type:'button',onclick:()=>onPick?.({...item,share:item.value/picked.total,total:picked.total})},h('span.tx-main',item.label),h('b',money(item.value)))))});
++ }});
+ }
+ function openDividend(s){
+  const asset=h('select.input',{'aria-label':'Ativo do provento'},h('option',{value:''},'Sem vínculo com ativo'),s.investments.map(x=>h('option',{value:x.id},x.name)));
+--- a/js/chart-motion.js
++++ b/js/chart-motion.js
+@@ -0,0 +1,41 @@
++/* Shared chart presentation: reveal on entry, linked highlights and safe text previews. */
++const selector='.budget-infographic,.viz-donut svg,.dividend-chart-scroll svg,.viz-bars,.viz-progress,.ritmo-arc';
++const seen=new WeakSet(), reduced=matchMedia('(prefers-reduced-motion: reduce)');
++let tooltip;
++function hide(){if(tooltip)tooltip.hidden=true;}
++function preview(node,event){
++ const text=node.getAttribute('aria-label')||node.querySelector('title')?.textContent;
++ if(!text)return;
++ if(!tooltip){tooltip=document.createElement('div');tooltip.className='chart-tooltip';tooltip.hidden=true;document.body.append(tooltip);}
++ tooltip.textContent=text;tooltip.hidden=false;
++ const rect=node.getBoundingClientRect(),x=event.clientX||rect.left+rect.width/2,y=event.clientY||rect.top;
++ tooltip.style.left=Math.max(8,Math.min(innerWidth-tooltip.offsetWidth-8,x-tooltip.offsetWidth/2))+'px';
++ tooltip.style.top=Math.max(8,Math.min(innerHeight-tooltip.offsetHeight-8,y-tooltip.offsetHeight-14))+'px';
++}
++const observer=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>{
++ if(!isIntersecting)return;
++ target.classList.add('chart-visible');observer.unobserve(target);
++ if(!reduced.matches){
++  const shapes=target.matches('svg')?target.querySelectorAll('path,circle.viz-seg,rect:not([fill="transparent"]),line[stroke="#00876c"]'):[];
++  shapes.forEach((shape,i)=>shape.animate([{opacity:0},{opacity:1}],{duration:650,delay:Math.min(i*35,350),easing:'ease-out'}));
++ }
++}),{threshold:.12});
++function enhance(root){
++ const charts=[...(root.matches?.(selector)?[root]:[]),...(root.querySelectorAll?.(selector)||[])];
++ charts.forEach(chart=>{
++  if(chart.matches('.ritmo-arc'))chart.setAttribute('tabindex','0');
++  if(seen.has(chart))return;seen.add(chart);chart.classList.add('chart-enhanced');observer.observe(chart);
++  const clear=()=>{chart.querySelectorAll('.chart-active,.chart-muted').forEach(x=>x.classList.remove('chart-active','chart-muted'));hide();};
++  const enter=e=>{
++   const node=e.target.closest?.('[role="button"],button,.ritmo-arc');if(!node||!chart.contains(node))return;
++   const key=node.dataset.chartKey;
++   if(key!==undefined)chart.querySelectorAll('[data-chart-key]').forEach(x=>x.classList.add(x.dataset.chartKey===key?'chart-active':'chart-muted'));
++   preview(node,e);
++  };
++  chart.addEventListener('pointerover',enter);chart.addEventListener('focusin',enter);
++  chart.addEventListener('pointerout',clear);chart.addEventListener('focusout',clear);chart.addEventListener('click',hide);
++ });
++}
++new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1)enhance(node);if(tooltip&&!document.querySelector('.chart-enhanced:focus-within,.chart-enhanced:hover'))hide();}).observe(document.documentElement,{childList:true,subtree:true});
++enhance(document.documentElement);
++addEventListener('scroll',hide,true);addEventListener('resize',hide);addEventListener('keydown',e=>{if(e.key==='Escape')hide();});
+--- a/js/main.js
++++ b/js/main.js
+@@ -1,3 +1,4 @@
++import './chart-motion.js';
+ /* Bivvo — entrada do app: autenticação, roteamento, ciclo de vida. */
+ import { h, $, $$, clear, VERSION, today, debounce } from './util.js';
+ import * as store from './store.js';
+--- a/app.css
++++ b/app.css
+@@ -1369,3 +1369,16 @@
+ .asset-logo{position:relative;overflow:hidden;background:var(--sunk);flex-shrink:0}
+ .asset-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:5px;background:var(--surface)}
+ .asset-monogram{font-size:.75rem;font-weight:800;color:var(--plum)}
++
++/* Animated, keyboard accessible charts shared throughout the application. */
++.invest-ring-grid{grid-template-columns:minmax(0,1fr);gap:32px}
++.invest-ring-grid>section+section{border-top:1px solid var(--line);padding-top:24px}
++.chart-enhanced [role=button],.chart-enhanced button{cursor:pointer;transition:filter .2s,opacity .2s}
++.chart-enhanced [role=button]:hover,.chart-enhanced [role=button]:focus-visible{filter:brightness(1.12);outline:2px solid var(--plum);outline-offset:3px}
++.chart-enhanced .chart-muted{opacity:.38}
++.chart-enhanced .chart-active{filter:brightness(1.1) drop-shadow(0 3px 5px #34204430)}
++.chart-visible{animation:chartReveal .65s ease-out both}
++.chart-tooltip{position:fixed;z-index:10000;max-width:min(320px,calc(100vw - 16px));padding:10px 14px;border-radius:12px;background:var(--ink);color:var(--surface);box-shadow:0 8px 28px #0003;font-size:.8rem;line-height:1.45;pointer-events:none}
++.chart-tooltip[hidden]{display:none}
++@keyframes chartReveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
++@media(prefers-reduced-motion:reduce){.chart-visible,.viz-bar-track i,.viz-progress-track i{animation:none!important}.chart-enhanced *{transition:none!important}}
+--- a/index.html
++++ b/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.15" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.15" type="module"></script>
++<link href="app.css?v=11.41.16" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.16" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/sw.js
++++ b/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-15-asset-logos';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.15', './js/main.js?v=11.41.15', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-16-interactive-charts';
++const SHELL = ['./', './index.html', './app.css?v=11.41.16', './js/main.js?v=11.41.16', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {

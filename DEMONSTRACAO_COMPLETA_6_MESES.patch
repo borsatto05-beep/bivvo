@@ -1,0 +1,560 @@
+--- a/bivvo_1139/js/family.js
++++ b/bivvo_1139/js/family.js
+@@ -1,6 +1,9 @@
+ /* Bivvo 10.7 — Espaço Família. Dados familiares vivem separados do payload financeiro pessoal. */
++import { isDemo } from './store.js';
++import { demoFamilyCall } from './demo-family.js';
+ import * as cloud from './cloud.js';
+ async function call(action, body = {}) {
++  if(isDemo())return demoFamilyCall(action,body);
+   const token = await cloud.accessToken();
+   if (!token) throw new Error('Entre na sua conta para usar o Espaço Família.');
+   const r = await fetch('/api/family', { method:'POST', headers:{ Authorization:'Bearer '+token, 'Content-Type':'application/json' }, body:JSON.stringify({ action, ...body }) });
+--- a/bivvo_1139/js/assistant.js
++++ b/bivvo_1139/js/assistant.js
+@@ -55,6 +55,7 @@
+ }
+ 
+ export async function askAI(question, tools = toolResults()) {
++  if(store.isDemo()){const answer=localAnswer(question,tools);return {title:'Demonstração · análise local',answer:answer?.text||rayX(tools).join(' ')+' Você pode testar outras perguntas e simulações com estes dados fictícios.'};}
+   const token = await cloud.accessToken(); if (!token) throw new Error('Entre novamente para usar o Bivvo IA.');
+   const r = await fetch('/api/assistant', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body:JSON.stringify({ question:String(question||'').slice(0,500), tools }) });
+   const j = await r.json().catch(()=>({}));
+--- a/bivvo_1139/js/billing.js
++++ b/bivvo_1139/js/billing.js
+@@ -1,3 +1,5 @@
++import { isDemo, getState, commit } from './store.js';
++import { toast } from './ui.js';
+ import * as cloud from './cloud.js';
+ import { adminTrack } from './admin-analytics.js';
+ 
+@@ -8,7 +10,9 @@
+   if (!token) throw new Error('Entre na sua conta para assinar.');
+   return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
+ }
++function demoSubscription(status){const sub={plan:'family',status,next_payment_date:new Date(Date.now()+30*86400000).toISOString(),created_at:new Date().toISOString()};commit(s=>{s.profile.demoSubscription=sub;},{reason:'demo-billing'});return {simulated:true,message:'Demonstração: alteração simulada, sem cobrança.',subscription:sub};}
+ export async function startSubscription(plan, interval = 'monthly') {
++  if(isDemo()){toast('Assinatura simulada. Nenhuma cobrança foi feita.');return {simulated:true};}
+   adminTrack('checkout_started', 'plan_' + plan + '_' + interval).catch(() => {});
+   const r = await fetch('/api/billing/create', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ plan, interval }) });
+   const j = await r.json().catch(() => ({}));
+@@ -18,6 +22,7 @@
+   location.href = j.checkoutUrl;
+ }
+ export async function syncBilling() {
++  if(isDemo())return {simulated:true,message:'Demonstração: alteração simulada, sem cobrança.'};
+   const r = await fetch('/api/billing/sync', { method: 'POST', headers: await authHeaders() });
+   const j = await r.json().catch(() => ({}));
+   if (!r.ok) throw new Error(j.error || 'Não foi possível atualizar sua assinatura.');
+@@ -25,6 +30,7 @@
+ }
+ 
+ export async function cancelSubscription() {
++  if(isDemo())return demoSubscription('cancelled');
+   const r = await fetch('/api/billing/cancel', { method: 'POST', headers: await authHeaders() });
+   const j = await r.json().catch(() => ({}));
+   if (!r.ok) throw new Error(j.error || 'Não foi possível cancelar a assinatura.');
+@@ -32,15 +38,18 @@
+ }
+ 
+ export async function pauseSubscription() {
++  if(isDemo())return demoSubscription('paused');
+   const r = await fetch('/api/billing/pause', { method: 'POST', headers: await authHeaders() });
+   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Não foi possível pausar a assinatura.'); return j;
+ }
+ export async function reactivateSubscription() {
++  if(isDemo())return demoSubscription('authorized');
+   const r = await fetch('/api/billing/reactivate', { method: 'POST', headers: await authHeaders() });
+   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Não foi possível reativar a assinatura.'); return j;
+ }
+ 
+ export async function currentSubscription() {
++  if(isDemo())return getState().profile.demoSubscription||{plan:'family',status:'authorized',next_payment_date:new Date(Date.now()+30*86400000).toISOString()};
+   const c = await cloud.sb();
+   const u = cloud.currentUser();
+   if (!u) return null;
+@@ -52,6 +61,7 @@
+ }
+ 
+ export async function startProTrial() {
++  if(isDemo())return {simulated:true,message:'Demonstração: alteração simulada, sem cobrança.'};
+   const r = await fetch('/api/trial/start', { method: 'POST', headers: await authHeaders() });
+   const j = await r.json().catch(() => ({}));
+   if (!r.ok) throw new Error(j.error || 'Não foi possível iniciar o teste.');
+--- a/bivvo_1139/js/plans.js
++++ b/bivvo_1139/js/plans.js
+@@ -6,6 +6,7 @@
+    - só recursos que geram custo (leitura de comprovante com IA) têm limite, e o limite é
+      conferido também no servidor (netlify/functions/scan-receipt.js). O limite daqui só serve para a interface. */
+ import * as cloud from './cloud.js';
++import { isDemo } from './store.js';
+ 
+ export const BILLING_LIVE = true;
+ 
+@@ -42,6 +43,7 @@
+ export const onPlanChange = fn => { listeners.add(fn); return () => listeners.delete(fn); };
+ 
+ export async function refreshPlan({ timeout = 4000 } = {}) {
++  if(isDemo())return getPlanInfo();
+   if (loading) return loading;
+   loading = (async () => {
+     const u = cloud.currentUser();
+@@ -62,11 +64,12 @@
+   })().finally(() => { loading = null; });
+   return loading;
+ }
+-export const getUserPlan = () => current.plan;
+-export const getPlanInfo = () => ({ ...current, name: PLAN_NAMES[current.plan] });
+-export const getPlanLimits = (plan = current.plan) => PLAN_LIMITS[plan] || PLAN_LIMITS.free;
++export const getUserPlan = () => isDemo()?'family':current.plan;
++export const getPlanInfo = () => isDemo()?{plan:'family',source:'demo',expiresAt:new Date(Date.now()+30*86400000).toISOString(),usage:{},name:'Demonstração completa · Família'}:({ ...current, name: PLAN_NAMES[current.plan] });
++export const getPlanLimits = (plan = getUserPlan()) => PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+ 
+-export function canUseFeature(feature, plan = current.plan) {
++export function canUseFeature(feature, plan = getUserPlan()) {
++  if(isDemo())return true;
+   const min = FEATURE_MIN_PLAN[feature];
+   if (!min) return true;
+   if (!BILLING_LIVE && LEGACY_FREE_UNTIL_BILLING.has(feature)) return true;
+@@ -74,6 +77,7 @@
+ }
+ /* Quanto ainda resta no mês para um recurso com cota ('scan' | 'ai'). */
+ export function getRemainingUsage(feature) {
++  if(isDemo())return {limit:Infinity,used:0,remaining:Infinity};
+   const key = feature === 'scan' ? 'scansPerMonth' : 'aiPerMonth';
+   const limit = getPlanLimits()[key];
+   const used = Number(current.usage[feature] || 0);
+@@ -82,4 +86,4 @@
+ /* O servidor devolve o uso atualizado depois de cada leitura. */
+ export function setUsage(feature, used) { current.usage = { ...current.usage, [feature]: used }; listeners.forEach(fn => fn(current)); }
+ /* Limite de cartões: só para criar novos; nunca esconde cartões que já existem. */
+-export function canAddCard(count) { if (!BILLING_LIVE) return true; return count < getPlanLimits().cards; }
++export function canAddCard(count) { if (isDemo() || !BILLING_LIVE) return true; return count < getPlanLimits().cards; }
+--- a/bivvo_1139/js/demo.js
++++ b/bivvo_1139/js/demo.js
+@@ -9,7 +9,7 @@
+   const t0 = today(), cur = ymOf(t0), day0 = Number(t0.slice(8));
+   /* Salário sempre já caiu neste mês (dia 1 a 5), para a demonstração nunca abrir com "Entrou R$ 0". */
+   const payDay = Math.max(1, Math.min(5, day0 - 3));
+-  const s = emptyState({ name: 'Ana', goal: 'economizar', incomeDay: payDay, onboarded: true, checkins: [], seenAchievements: [], invitesSent: 0 });
++  const s = emptyState({ name: 'Ana', goal: 'economizar', incomeDay: payDay, onboarded: true, checkins: [], seenAchievements: [], invitesSent: 0, activationValueSeen: true, modules: { loans: true } });
+   s.savingPlan = { percent: 12 };
+   s.emergencyPlan = { target: 15000 };
+   s.cards = [
+@@ -17,17 +17,17 @@
+     { id: uid(), name: 'Black', limit: 9000, close: 20, due: 28, tint: 'graphite' }
+   ];
+   s.fixed = [
+-    { id: uid(), name: 'Salário', value: 6200, due: payDay, cat: 'Salário', rec: 'Mensal', type: 'income', startYM: addMonthsYM(cur, -4) },
+-    { id: uid(), name: 'Aluguel', value: 1380, due: 10, cat: 'Moradia', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -4) },
+-    { id: uid(), name: 'Internet fibra', value: 109.9, due: 15, cat: 'Internet', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -4) },
+-    { id: uid(), name: 'Energia', value: 187.4, due: 18, cat: 'Energia', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -4) },
+-    { id: uid(), name: 'Academia', value: 99.9, due: 7, cat: 'Saúde', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -4) }
++    { id: uid(), name: 'Salário', value: 6200, due: payDay, cat: 'Salário', rec: 'Mensal', type: 'income', startYM: addMonthsYM(cur, -5) },
++    { id: uid(), name: 'Aluguel', value: 1380, due: 10, cat: 'Moradia', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -5) },
++    { id: uid(), name: 'Internet fibra', value: 109.9, due: 15, cat: 'Internet', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -5) },
++    { id: uid(), name: 'Energia', value: 187.4, due: 18, cat: 'Energia', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -5) },
++    { id: uid(), name: 'Academia', value: 99.9, due: 7, cat: 'Saúde', rec: 'Mensal', type: 'expense', startYM: addMonthsYM(cur, -5) }
+   ];
+   const tx = (date, desc, cat, value, extra = {}) => s.transactions.push({ id: uid(), date, desc, cat, type: 'expense', value: round2(value), status: 'Pago', method: 'PIX', createdAt: new Date(date + 'T20:00').getTime(), demoSeed: true, ...extra });
+   const inc = (date, desc, cat, value, extra = {}) => s.transactions.push({ id: uid(), date, desc, cat, type: 'income', value: round2(value), status: 'Pago', method: 'Transferência', createdAt: new Date(date + 'T09:00').getTime(), demoSeed: true, ...extra });
+ 
+-  inc(dateInYM(addMonthsYM(cur, -4), 1), 'Saldo inicial', 'Saldo inicial', 600, { kind: 'opening' });
+-  for (let i = 4; i >= 0; i--) {
++  inc(dateInYM(addMonthsYM(cur, -5), 1), 'Saldo inicial', 'Saldo inicial', 6000, { kind: 'opening' });
++  for (let i = 5; i >= 0; i--) {
+     const ym = addMonthsYM(cur, -i), [y, m] = ym.split('-').map(Number);
+     const lastDay = i === 0 ? day0 : daysInMonth(y, m);
+     /* recorrentes do passado já pagos */
+@@ -40,7 +40,7 @@
+     if (i === 2) inc(dateInYM(ym, 22), 'Freela identidade visual', 'Freelance', 900);
+     if (i === 1) inc(dateInYM(ym, 14), 'Venda da bike', 'Venda', 650);
+     /* gastos variáveis: delivery cai nos últimos meses (história para os insights) */
+-    const deliveryPerMonth = [9, 8, 7, 4, 3][4 - i];
++    const deliveryPerMonth = [10, 9, 8, 7, 4, 3][5 - i];
+     for (let d = 1; d <= lastDay; d++) {
+       const date = dateInYM(ym, d);
+       if (d % 3 === 1) tx(date, ['Mercado Dia', 'Assaí', 'Hortifruti', 'Pão de Açúcar'][d % 4], 'Mercado', r(42, 160), { method: 'Débito' });
+@@ -53,9 +53,9 @@
+     if (lastDay >= 12) tx(dateInYM(ym, 12), 'Cinema', 'Lazer', r(48, 90), { method: 'Crédito', card: 'Roxinho', status: i === 0 ? 'Pendente' : 'Pago' });
+     if (lastDay >= 6) tx(dateInYM(ym, 6), 'Spotify', 'Assinaturas', 21.9, { method: 'Crédito', card: 'Roxinho', status: 'Pago' });
+     if (lastDay >= 9) tx(dateInYM(ym, 9), 'Netflix', 'Assinaturas', 44.9, { method: 'Crédito', card: 'Black', status: 'Pago' });
+-    if (lastDay >= 16) tx(dateInYM(ym, 16), ['Shein', 'Renner', 'Amazon', 'Mercado Livre', 'Shopee'][i], ['Roupas', 'Roupas', 'Compras', 'Compras', 'Compras'][i], r(90, 240), { method: 'Crédito', card: i % 2 ? 'Black' : 'Roxinho', status: i <= 1 ? 'Pendente' : 'Pago' });
++    if (lastDay >= 16) tx(dateInYM(ym, 16), ['Shein', 'Renner', 'Amazon', 'Mercado Livre', 'Shopee', 'Livraria'][i], ['Roupas', 'Roupas', 'Compras', 'Compras', 'Compras', 'Educação'][i], r(90, 240), { method: 'Crédito', card: i % 2 ? 'Black' : 'Roxinho', status: i <= 1 ? 'Pendente' : 'Pago' });
+     /* guardado no mês */
+-    s.transactions.push({ id: uid(), date: dateInYM(ym, Math.min(6, lastDay)), desc: 'Guardar na reserva', cat: 'Reserva de Emergência', type: 'expense', value: 450 + (4 - i) * 60, status: 'Pago', method: 'Transferência', kind: 'save', goalId: 'demo-reserve', demoSeed: true, createdAt: Date.now() });
++    s.transactions.push({ id: uid(), date: dateInYM(ym, Math.min(6, lastDay)), desc: 'Guardar na reserva', cat: 'Reserva de Emergência', type: 'expense', value: 450 + (5 - i) * 60, status: 'Pago', method: 'Transferência', kind: 'save', goalId: 'demo-reserve', demoSeed: true, createdAt: Date.now() });
+   }
+   /* começo de mês: alguns lançamentos a mais para a tela nunca parecer vazia */
+   if (day0 < 8) {
+@@ -82,11 +82,32 @@
+   s.goals = [reserve, { id: uid(), name: 'Viagem pro Nordeste', emoji: '🏝️', target: 6000, saved: 2150, date: dateInYM(addMonthsYM(cur, 7), 15) }, { id: uid(), name: 'Trocar o celular', emoji: '📱', target: 2800, saved: 2800, date: '' }];
+   s.budget_limits = { Mercado: 1100, Delivery: 250, Alimentação: 420, Transporte: 320, Lazer: 200, Compras: 350 };
+   s.investments = [
+-    { id: uid(), type: 'CDB', name: 'CDB Banco Inter', desc: '110% do CDI', value: 3000, costBasis: 3000, purchaseDate: dateInYM(addMonthsYM(cur, -10), 3), yieldType: 'Pós-fixado', yieldRate: 110, yieldIndex: 'CDI' },
+-    { id: uid(), type: 'Renda fixa', name: 'Tesouro IPCA+ 2035', desc: 'Aposentadoria', value: 1800, costBasis: 1800, purchaseDate: dateInYM(addMonthsYM(cur, -7), 12), yieldType: 'Prefixado', yieldRate: 11.2 },
++    { id: uid(), type: 'CDB', name: 'CDB Banco Inter', desc: '110% do CDI', value: 3000, costBasis: 3000, purchaseDate: dateInYM(addMonthsYM(cur, -5), 3), yieldType: 'Pós-fixado', yieldRate: 110, yieldIndex: 'CDI' },
++    { id: uid(), type: 'Renda fixa', name: 'Tesouro IPCA+ 2035', desc: 'Aposentadoria', value: 1800, costBasis: 1800, purchaseDate: dateInYM(addMonthsYM(cur, -4), 12), yieldType: 'Prefixado', yieldRate: 11.2 },
+     { id: uid(), type: 'Fundos', name: 'MXRF11', desc: 'Fundo imobiliário', quantity: 120, purchasePrice: 9.85, marketPrice: 10.12, value: 1182, costBasis: 1182, purchaseDate: dateInYM(addMonthsYM(cur, -5), 18) },
+     { id: uid(), type: 'Ações', name: 'WEGE3', desc: 'WEG ON', quantity: 20, purchasePrice: 38.4, marketPrice: 41.9, value: 768, costBasis: 768, purchaseDate: dateInYM(addMonthsYM(cur, -3), 9) }
+   ];
++
++  const extraAssets=[['PETR4','Ações',37.5],['VALE3','Ações',58],['ITUB4','Ações',34],['BBAS3','Ações',27],['HYPE3','Ações',22],['USIM5','Ações',6.8],['TAEE11','Ações',35],['VIVT3','Ações',28],['HGLG11','Fundos',155],['XPML11','Fundos',102],['KNRI11','Fundos',145],['IVVB11','Fundos',310],['BOVA11','Fundos',125],['HASH11','Fundos',68]];
++  extraAssets.forEach(([name,type,price],i)=>{const quantity=type==='Fundos'?2:5, cost=round2(quantity*price*.95);s.investments.push({id:uid(),name,type,quantity,marketPrice:price,purchasePrice:round2(price*.95),value:cost,costBasis:cost,purchaseDate:dateInYM(addMonthsYM(cur,-(i%6)),i%6===0?Math.min(day0,5):5)});});
++  for(const inv of s.investments){
++    if(inv.purchaseDate>t0)inv.purchaseDate=t0;
++    inv.txId=uid();tx(inv.purchaseDate,'Aplicação em '+inv.name,'Investimentos',inv.costBasis,{id:inv.txId,kind:'save',investmentId:inv.id,method:'Transferência'});
++  }
++  /* Seis meses de proventos vinculados aos ativos; um recebimento futuro para testar pendências. */
++  for(let i=5;i>=0;i--){
++    const ym=addMonthsYM(cur,-i),date=dateInYM(ym,i===0?Math.min(day0,10):10);
++    inc(date,'Proventos MXRF11','Rendimentos',round2(11.4+(5-i)*.6),{investmentId:s.investments[2].id,transactionRole:'investment_dividend'});
++    inc(date,'Dividendos WEGE3','Rendimentos',round2(8+(5-i)*1.2),{investmentId:s.investments[3].id,transactionRole:'investment_dividend'});
++    for(let j=0;j<3;j++){
++    const id=uid(),due=dateInYM(ym,i===0?Math.min(28,Math.max(day0,15)):15);
++    const loan={id,person:i===0?['Marcos','Juliana','Pedro'][j]:'Cliente exemplo '+(6-i)+'-'+(j+1),principalOriginal:500,principal:i===0?500:0,interestMode:'percent',interestRate:5,interestDue:i===0?25:0,periodicity:'monthly',due,status:i===0?'open':'paid',createdAt:new Date(dateInYM(ym,1)+'T12:00').getTime()};
++    s.loans.push(loan);s.loanCycles.push({id:uid(),loanId:id,date:dateInYM(ym,1),due,principal:500,interest:25,type:'created'});
++    if(i>0){const pid=uid();s.loanPayments.push({id:pid,loanId:id,date:due,amount:525,interest:25,principal:500});inc(due,'Juros recebidos · '+loan.person,'Juros / Empréstimo',25,{loanId:id,loanPaymentId:pid,transactionRole:'loan_interest_income'});}
++    }
++  }
++  inc(addDays(t0,7),'Proventos MXRF11 a receber','Rendimentos',15.6,{status:'Pendente',investmentId:s.investments[2].id,transactionRole:'investment_dividend'});
++  s.subscriptions=[{id:uid(),name:'Armazenamento na nuvem',value:9.9,rec:'Mensal',active:true}];
+   s.challenges = [
+     { id: uid(), type: 'cut', cat: 'Delivery', value: 0, startedAt: dateInYM(cur, 1), endsAt: dateInYM(cur, 31), baseline: 330, status: 'active' },
+     { id: uid(), type: 'log7', value: 0, startedAt: addDays(t0, -12), endsAt: addDays(t0, -6), status: 'done', completedAt: addDays(t0, -6) }
+--- a/bivvo_1139/js/quickcapture.js
++++ b/bivvo_1139/js/quickcapture.js
+@@ -113,7 +113,7 @@
+   const input = h('input.qc-input', { type: 'text', inputmode: 'text', enterKeyHint: 'done', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'Ex.: mercado 45 ou iFood 32 no Nubank', 'aria-label': 'Anotar gasto ou entrada' });
+   const btn = h('button.qc-save', { type: 'submit', 'aria-label': 'Salvar' }, 'Salvar');
+   const preview = previewBox();
+-  const mic = h('button.qc-mic', { type: 'button', 'aria-label': voiceSupported() ? 'Falar o gasto' : 'Entrada por voz indisponível neste navegador', disabled: !voiceSupported(), onclick: () => openSmartCapture({ voice: true }) }, '🎙');
++  const mic = h('button.qc-mic', { type: 'button', 'aria-label': store.isDemo()?'Testar entrada por voz':voiceSupported() ? 'Falar o gasto' : 'Entrada por voz indisponível neste navegador', disabled: !store.isDemo()&&!voiceSupported(), onclick: () => openSmartCapture({ voice: true }) }, '🎙');
+   const camera = h('button.qc-mic.qc-camera', { type: 'button', 'aria-label': 'Escanear comprovante com a câmera', onclick: () => startScan() }, '📷');
+   const wrap = h('form.card.qc-bar', { onsubmit: e => { e.preventDefault(); save(); } },
+     h('div.qc-row', h('span.qc-bolt', { 'aria-hidden': 'true' }, '⚡'), input, mic, camera, btn), preview);
+@@ -152,6 +152,7 @@
+   const micBtn = h('button.qc-tool', { type: 'button', onclick: () => toggleVoice() }, h('span', { 'aria-hidden': 'true' }, '🎙'), 'Falar');
+   const scanBtn = h('button.qc-tool', { type: 'button', 'aria-label': 'Abrir câmera para escanear comprovante', onclick: () => { sheet.close(); setTimeout(() => startScan(), 150); } }, h('span', { 'aria-hidden': 'true' }, '📷'), 'Câmera');
+   function toggleVoice() {
++    if(store.isDemo()){input.value='mercado 87 no pix';spoken=true;source='voice';preview.reset();paint();voiceMsg.textContent='Voz simulada na demonstração. Confira e salve o exemplo, ou edite o texto.';return;}
+     if (listening) { listening.stop(); return; }
+     micBtn.classList.add('on'); voiceMsg.textContent = 'Ouvindo… ex.: "gastei 87 no mercado no pix"';
+     listening = listen({
+@@ -160,7 +161,7 @@
+       onError: m => { listening = null; micBtn.classList.remove('on'); voiceMsg.textContent = m; }
+     });
+   }
+-  const tools = h('div.qc-tools', voiceSupported() ? micBtn : null, scanBtn);
++  const tools = h('div.qc-tools', store.isDemo()||voiceSupported() ? micBtn : null, scanBtn);
+   const details = h('button.link.sm', { type: 'button', onclick: () => {
+     const p = parsed && !parsed.error ? parsed : {};
+     const c = preview.choices();
+@@ -203,7 +204,8 @@
+ /* ---------------- comprovante: escolher → ler → CONFIRMAR ---------------- */
+ export async function startScan(file) {
+   const [{ pickImage, readReceipt }, { openScanConfirm, openScanUnavailable }, cloud, { openPaywall }] = await Promise.all([import('./scan.js'), import('./views/scanconfirm.js'), import('./cloud.js'), import('./views/pro.js')]);
+-  if (store.isDemo() || !cloud.currentUser()) { openScanUnavailable('demo'); return; }
++  if(store.isDemo()){openScanConfirm({value:86.9,valueText:'R$ 86,90',merchant:'Mercado exemplo · comprovante simulado',date:today(),categoryHint:'Mercado',method:'PIX',confidence:1,demo:true});return;}
++  if (!cloud.currentUser()) { openScanUnavailable('demo'); return; }
+   const f = file || await pickImage();
+   if (!f) return;
+   const busy = toastBusy('Lendo o comprovante…');
+--- a/bivvo_1139/js/main.js
++++ b/bivvo_1139/js/main.js
+@@ -126,6 +126,7 @@
+ function bindShell() {
+   $$('[data-route]').forEach(b => b.addEventListener('click', () => go(b.dataset.route)));
+   $$('[data-action="add"]').forEach(b => b.addEventListener('click', () => openQuickAdd()));
++  $('#demoReset')?.addEventListener('click', enterDemo);
+   $('#demoSignup')?.addEventListener('click', () => leaveDemo(true));
+   cloud.onSyncStatus(st => {
+     const d = $('#syncDot'); if (!d) return;
+@@ -208,9 +209,11 @@
+ /* ---------------- demo ---------------- */
+ function enterDemo() {
+   closeAllSheets();
++  ctx.month=today().slice(0,7);ctx.params={};
++  history.replaceState(history.state,'','#/inicio');
+   store.load(buildDemo(), { demo: true });
+   showApp({ demo: true });
+-  toast('Você está na demonstração. Nada aqui é salvo.');
++  toast('Demonstração completa: seis meses de dados fictícios. Teste à vontade; alterações ficam só nesta sessão.');
+ }
+ async function leaveDemo(toSignup) {
+   store.load(store.emptyState(), { demo: true });
+@@ -391,7 +394,7 @@
+   if (new URLSearchParams(location.search).get('demo') === '1') { enterDemo(); }
+   try {
+     await cloud.initAuth({
+-      onSignedIn: user => { if (ctx.demo) { ctx.demo = false; } bootUser(user); },
++      onSignedIn: user => { if (ctx.demo) return; bootUser(user); },
+       onSignedOut: () => { if (!ctx.demo) { store.load(store.emptyState(), { demo: true }); showAuth(); } },
+       onRecovery: recoveryFlow
+     });
+--- a/bivvo_1139/js/views/pro.js
++++ b/bivvo_1139/js/views/pro.js
+@@ -1,4 +1,5 @@
+ /* Bivvo 10.5 — planos pagos com checkout seguro no Mercado Pago. */
++import { isDemo } from '../store.js';
+ import { h, money, shortDate } from '../util.js';
+ import { openSheet, toast, confirmSheet } from '../ui.js';
+ import { PRICES, getPlanInfo, PLAN_LIMITS, refreshPlan } from '../plans.js';
+@@ -82,6 +83,7 @@
+   const annualBtn = h('button.plan-cycle-btn', { type:'button', onclick:()=>setIntervalChoice('annual') }, 'Anual · 2 meses grátis');
+ 
+   const subscribe = async (e,key) => {
++    if(isDemo()){openSheet({title:'Assinatura de demonstração',content:h('p','Você escolheu o Bivvo '+key+'. Os recursos já estão liberados para testar. Nenhum pagamento é solicitado e nenhuma cobrança é feita.')});return;}
+     const b=e.currentTarget; b.disabled=true; const old=b.textContent; b.textContent='Preparando checkout…';
+     track('plan_selected',{plan:key,source,interval});
+     const price = interval === 'annual' ? PRICES[key].annual : PRICES[key].monthly;
+@@ -132,7 +134,7 @@
+   const trial = !active ? h('button.btn.ghost.block', { type:'button', onclick: async e => { const b=e.currentTarget; b.disabled=true; const old=b.textContent; b.textContent='Ativando teste…'; try { const r=await startProTrial(); track('trial_started',{source,plan:'pro'}); adminTrack('trial_started','plans').catch(()=>{}); await refreshPlan(); toast(r.message || 'Teste Pro ativado.'); b.textContent='Pro liberado por 7 dias ✓'; } catch(err){ b.disabled=false; b.textContent=old; toast(err.message); } } }, 'Experimentar Pro por 7 dias · sem cartão') : null;
+   const manage = active ? h('button.btn.ghost.block', { type:'button', onclick: () => openSubscriptionManager() }, 'Gerenciar minha assinatura') : null;
+   openSheet({ label:'Planos Bivvo', wide:true, content:h('div.pro-screen',
+-    h('p.pro-kicker','Bivvo Premium'), h('h2','Escolha o plano ideal para você.'),
++    h('p.pro-kicker',isDemo()?'Demonstração · sem cobrança':'Bivvo Premium'), h('h2','Escolha o plano ideal para você.'),
+     h('p.muted','Comece no seu ritmo. No anual, você economiza o equivalente a 2 mensalidades.'),
+     active ? h('p.pro-active', `Você está no ${info.name} até ${shortDate(info.expiresAt.slice(0,10))}.`) : null,
+     h('ul.pro-list', BENEFITS().map(b=>h('li',h('span.pro-ico',{'aria-hidden':'true'},b.icon),h('div',h('b',b.title),h('small',b.text))))),
+--- a/bivvo_1139/js/views/family.js
++++ b/bivvo_1139/js/views/family.js
+@@ -5,13 +5,14 @@
+ import { toast, openSheet, askSheet, confirmSheet, sectionTitle } from '../ui.js';
+ import { getPlanInfo } from '../plans.js';
+ import { openProScreen } from './pro.js';
+-import { ctx } from '../nav.js';
++import { demoFamily } from '../demo-family.js';
++import { ctx, rerender } from '../nav.js';
+ 
+ let cache = undefined, loading = false;
+ const roleName = r => ({owner:'Responsável',editor:'Pode editar',viewer:'Somente leitura'}[r]||r);
+ export function renderFamily(root){
+   root.append(h('section.family-head', h('div', h('span.eyebrow','Bivvo Família'), h('h2','Dinheiro em conjunto, privacidade por padrão.'), h('p.muted','Compartilhe só o que fizer sentido. Seus lançamentos pessoais continuam privados até você escolher compartilhar.'))));
+-  if(ctx.demo){ root.append(h('section.card.empty',h('b','Espaço Família não funciona na demonstração.'),h('p','Entre em uma conta para criar ou aceitar um convite.'))); return; }
++  if(ctx.demo){root.append(h('p.notice','Demonstração: membros, convites e compartilhamentos são simulados nesta sessão.'));renderSpace(root,demoFamily());return;}
+   if(cache===undefined){ root.append(h('section.card',h('p.muted','Carregando seu espaço…'))); load(root); return; }
+   if(cache?.error){ root.append(h('section.card.empty',h('b','Não foi possível abrir o Espaço Família.'),h('p',cache.error),h('button.btn',{onclick:()=>{cache=undefined;renderFamily(root)}},'Tentar novamente'))); return; }
+   if(!cache){ renderEmpty(root); return; }
+@@ -26,7 +27,7 @@
+ }
+ async function createSpace(){ const name=await askSheet({title:'Nome do espaço',label:'Ex.: Família Carmo',confirmLabel:'Criar'}); if(!name)return; try{cache=(await family.createFamily(name)).data; toast('Espaço Família criado'); reroute();}catch(e){toast(e.message,{tone:'warn'})} }
+ async function acceptInvite(){ const raw=await askSheet({title:'Entrar no Espaço Família',message:'Cole o código recebido do responsável.',label:'Código do convite',confirmLabel:'Entrar'}); if(!raw)return; const code=String(raw).trim().replace(/^.*[?&#]family=/,'').split(/[&#]/)[0]; try{cache=(await family.acceptInvite(code)).data;toast('Você entrou no Espaço Família');reroute();}catch(e){toast(e.message,{tone:'warn'})} }
+-function reroute(){ location.hash='#/familia'; }
++function reroute(){ if(ctx.demo){rerender();return;} location.hash='#/familia'; }
+ function renderSpace(root,d){
+  const me=d.membership, canManage=me.role==='owner', canEdit=(canManage||me.role==='editor')&&d.active;
+  const income=d.shared.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.value||0),0), expense=d.shared.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.value||0),0);
+@@ -40,10 +41,10 @@
+  if(me.role!=='owner') root.append(h('section.card',h('button.btn.ghost.danger-text',{onclick:leave},'Sair deste Espaço Família')));
+ }
+ function memberRow(m,d,canManage){ const mine=m.id===d.membership.id; const actions=[]; if(canManage&&m.role!=='owner'){ actions.push(h('button.link.sm',{onclick:()=>changeRole(m)},roleName(m.role))); actions.push(h('button.link.sm.danger-text',{onclick:()=>remove(m)},'Remover')); } return h('div.family-member',h('span.avatar',String(m.display_name||'?').charAt(0).toUpperCase()),h('span',h('b',m.display_name||'Membro'),h('small',mine?'Você · '+roleName(m.role):roleName(m.role))),h('span.family-member-actions',actions)); }
+-async function invite(){ try{const role=await chooseRole(); if(!role)return; const r=await family.createInvite(role); const link=`${location.origin}${location.pathname}#/familia?family=${r.code}`; const box=h('textarea.input',{readOnly:true,rows:3},link); openSheet({title:'Convite criado',subtitle:'Válido por 7 dias. Envie este link para a pessoa.',content:[box,h('button.btn.primary.block',{onclick:async()=>{try{await navigator.clipboard.writeText(link);toast('Link copiado')}catch{box.select();document.execCommand('copy');toast('Link copiado')}}},'Copiar convite')]}); }catch(e){toast(e.message,{tone:'warn'})} }
++async function invite(){ try{const role=await chooseRole(); if(!role)return; const r=await family.createInvite(role); const link=`${location.origin}${location.pathname}#/familia?family=${r.code}`; const box=h('textarea.input',{readOnly:true,rows:3},link); openSheet({title:'Convite criado',subtitle:ctx.demo?'Convite de exemplo. Não convida pessoas reais.':'Válido por 7 dias. Envie este link para a pessoa.',content:[box,h('button.btn.primary.block',{onclick:async()=>{try{await navigator.clipboard.writeText(link);toast('Link copiado')}catch{box.select();document.execCommand('copy');toast('Link copiado')}}},'Copiar convite')]}); }catch(e){toast(e.message,{tone:'warn'})} }
+ function chooseRole(){ return new Promise(resolve=>{ const sh=openSheet({title:'Permissão do novo membro',content:h('div.family-role-choices',h('button.menu-item',{onclick:()=>{sh.close();resolve('editor')}},h('span.mi-ico','✎'),h('span',h('b','Pode editar'),h('small','Pode compartilhar e remover os próprios lançamentos compartilhados.'))),h('button.menu-item',{onclick:()=>{sh.close();resolve('viewer')}},h('span.mi-ico','◉'),h('span',h('b','Somente leitura'),h('small','Acompanha o espaço sem alterar dados.'))))}); }); }
+ async function changeRole(m){ const role=await chooseRole(); if(!role)return; try{await family.setRole(m.id,role);cache=(await family.getFamily()).data;reroute();}catch(e){toast(e.message,{tone:'warn'})} }
+ async function remove(m){if(!await confirmSheet({title:`Remover ${m.display_name||'membro'}?`,message:'A pessoa perderá acesso ao espaço e os lançamentos que ela compartilhou serão removidos.',confirmLabel:'Remover',danger:true}))return;try{await family.removeMember(m.id);cache=(await family.getFamily()).data;reroute()}catch(e){toast(e.message,{tone:'warn'})}}
+ async function leave(){if(!await confirmSheet({title:'Sair do Espaço Família?',message:'Você perderá acesso aos dados compartilhados. Seus dados pessoais não serão apagados.',confirmLabel:'Sair',danger:true}))return;try{await family.leaveFamily();cache=null;reroute()}catch(e){toast(e.message,{tone:'warn'})}}
+-function openSharePicker(d){ const mine=new Set(d.shared.filter(x=>x.user_id===d.membership.user_id).map(x=>x.source_id)); const tx=store.getState().transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,80); const list=h('div.family-picker',tx.map(t=>{const on=mine.has(t.id); return h('button.menu-item',{onclick:async e=>{const btn=e.currentTarget;btn.disabled=true;try{if(on)await family.unshareTransaction(t.id);else await family.shareTransaction(t);cache=(await family.getFamily()).data;toast(on?'Voltou a ser privado':'Compartilhado com a família');document.querySelector('.sheet-wrap')?.remove();reroute()}catch(err){toast(err.message,{tone:'warn'});btn.disabled=false}}},h('span.mi-ico',on?'✓':'○'),h('span',h('b',t.desc),h('small',`${t.date.split('-').reverse().join('/')} · ${t.cat}`)),h('b',money(t.value)))})); openSheet({title:'O que compartilhar',subtitle:'Toque para alternar. Só uma cópia resumida é compartilhada; o lançamento original continua no seu extrato pessoal.',content:list}); }
++function openSharePicker(d){ const mine=new Set(d.shared.filter(x=>x.user_id===d.membership.user_id).map(x=>x.source_id)); const tx=store.getState().transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,80); const list=h('div.family-picker',tx.map(t=>{const on=mine.has(t.id); return h('button.menu-item',{onclick:async e=>{const btn=e.currentTarget;btn.disabled=true;try{if(on)await family.unshareTransaction(t.id);else await family.shareTransaction(t);cache=(await family.getFamily()).data;toast(on?'Voltou a ser privado':'Compartilhado com a família');picker.close();reroute()}catch(err){toast(err.message,{tone:'warn'});btn.disabled=false}}},h('span.mi-ico',on?'✓':'○'),h('span',h('b',t.desc),h('small',`${t.date.split('-').reverse().join('/')} · ${t.cat}`)),h('b',money(t.value)))})); const picker=openSheet({title:'O que compartilhar',subtitle:'Toque para alternar. Só uma cópia resumida é compartilhada; o lançamento original continua no seu extrato pessoal.',content:list}); }
+ function sharedRow(x,d,canEdit){ const mine=x.user_id===d.membership.user_id; return h('div.family-shared-row',h('span',h('b',x.description),h('small',`${x.date.split('-').reverse().join('/')} · ${x.category}${mine?' · você':''}`)),h('b',`${x.type==='income'?'+':'−'} ${money(x.value)}`),mine&&canEdit?h('button.icon-btn',{title:'Tornar privado',onclick:async()=>{try{await family.unshareTransaction(x.source_id);cache=(await family.getFamily()).data;reroute()}catch(e){toast(e.message,{tone:'warn'})}}},'×'):null); }
+--- a/bivvo_1139/js/views/assistant.js
++++ b/bivvo_1139/js/views/assistant.js
+@@ -1,5 +1,6 @@
+ /* Bivvo — Fase 3: tela do Bivvo IA. */
+ import { h, money0 } from '../util.js';
++import { isDemo } from '../store.js';
+ import { canUseFeature } from '../plans.js';
+ import { openPaywall } from './pro.js';
+ import { toast } from '../ui.js';
+@@ -23,6 +24,7 @@
+   const input=h('textarea.ai-input',{rows:3,maxlength:500,placeholder:'Ex.: Quanto posso gastar até receber?'});
+   const send=h('button.btn.primary',{type:'button'},'Perguntar');
+   const add=(who,title,text)=>chat.append(h('div.ai-msg.'+who, title?h('b',title):null, h('p',text)));
++  if(isDemo())add('bot','Demonstração','Nesta sessão, as respostas são calculadas localmente sobre dados fictícios; nenhuma pergunta é enviada ao serviço de IA.');
+   add('bot',crisis?'Plano de recuperação':'Bivvo IA',crisis?`Você veio do modo "Meu dinheiro não vai dar". Vou manter o foco no essencial, no seu limite até receber e no próximo passo possível.`:'Posso explicar seu caixa, mês, previsão, cartões, patrimônio e compromissos. Para perguntas comuns, respondo no próprio aparelho.');
+   const run=async q=>{
+     q=String(q||'').trim(); if(!q)return; add('me',null,q); input.value='';
+@@ -32,6 +34,7 @@
+     if(/e se|simular.*cenario|parar de parcelar|renda cair|usar.*reserva/i.test(nq)){ add('bot','Central E se?','Vou abrir simulações locais que não alteram seus dados.'); openWhatIf(); track('assistant_used',{source:'whatif'}); return; }
+     if(/o que.*pago.*primeiro|nao tenho dinheiro.*pagar tudo|pago.*fatura.*conta|organize.*pagamentos/i.test(nq)){ add('bot','Decisão financeira','Vou comparar seus compromissos, vencimentos e saldo sem alterar nenhum lançamento.'); openDecisionAssistant(); track('assistant_used',{source:'decision'}); return; }
+     const local=localAnswer(q,tools); if(local){ add('bot',local.title,local.text); track('assistant_used',{source:'local'}); return; }
++    if(isDemo()){const r=await askAI(q,tools);add('bot',r.title,r.answer);return;}
+     if(!hasConsent()){
+       const ok=confirm('Para responder esta pergunta, o Bivvo enviará somente números agregados e resultados calculados (como saldo livre e previsão) ao serviço de IA. Descrições do extrato, nomes de compras e o extrato bruto não são enviados. Continuar?');
+       if(!ok){add('bot','Privacidade','Tudo bem. Você pode usar as perguntas rápidas, que são respondidas somente no aparelho.');return;} consent();
+--- a/bivvo_1139/js/views/forms.js
++++ b/bivvo_1139/js/views/forms.js
+@@ -444,6 +444,7 @@
+ const INV_TYPES = ['Ações', 'Fundos', 'CDB', 'Renda fixa', 'Poupança', 'Cripto', 'Outros'];
+ const B3_FALLBACK = [['PETR4', 'Petrobras PN'], ['VALE3', 'Vale ON'], ['ITUB4', 'Itaú Unibanco PN'], ['BBAS3', 'Banco do Brasil ON'], ['WEGE3', 'WEG ON'], ['BBDC4', 'Bradesco PN'], ['ABEV3', 'Ambev ON'], ['B3SA3', 'B3 ON'], ['MXRF11', 'Maxi Renda FII'], ['HGLG11', 'CSHG Logística'], ['KNRI11', 'Kinea Renda Imobiliária'], ['XPML11', 'XP Malls'], ['BTLG11', 'BTG Logística'], ['IVVB11', 'iShares S&P 500']];
+ async function searchB3(term) {
++  if(store.isDemo()){const q=term.toUpperCase();return B3_FALLBACK.filter(([k,n])=>k.includes(q)||n.toUpperCase().includes(q));}
+   try {
+     const r = await fetch('/api/b3-assets?search=' + encodeURIComponent(term), { cache: 'no-store' });
+     if (!r.ok) throw new Error();
+@@ -452,7 +453,7 @@
+   } catch { const t = term.toUpperCase(); return B3_FALLBACK.filter(([k, n]) => k.includes(t) || n.toUpperCase().includes(t)); }
+ }
+ export async function fetchQuoteDetails(ticker) {
+-  if (ctx.demo) throw new Error('Cotações em tempo real ficam disponíveis com conta criada.');
++  if (store.isDemo()){const x=S().investments.find(x=>x.name.toUpperCase()===ticker.toUpperCase());return {price:num(x?.marketPrice)||({PETR4:37.5,VALE3:58,ITUB4:34,MXRF11:10.12,WEGE3:41.9}[ticker.toUpperCase()])||25,sector:investmentSector({name:ticker,type:x?.type||'Ações'})};}
+   const token = await cloud.accessToken();
+   const r = await fetch('/api/quote?ticker=' + encodeURIComponent(ticker), { cache: 'no-store', headers: token ? { Authorization: 'Bearer ' + token } : {} });
+   const j = await r.json().catch(() => ({}));
+@@ -496,7 +497,7 @@
+   async function getQuote() {
+     const t = name.value.trim().toUpperCase(); if (!t) return;
+     quoteMsg.textContent = 'Buscando cotação…';
+-    try { const quote = await fetchQuoteDetails(t), p=quote.price; if(!sectorInput.value.trim()){const label=investmentSector({name:t,type:st.type,quoteSector:quote.sector});if(label!=='Setor não identificado')sectorInput.value=label;} quoteMsg.textContent = `Cotação atual: ${money(p)}`; quoteMsg.dataset.price = p; if (!price.value) price.value = p.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
++    try { const quote = await fetchQuoteDetails(t), p=quote.price; if(!sectorInput.value.trim()){const label=investmentSector({name:t,type:st.type,quoteSector:quote.sector});if(label!=='Setor não identificado')sectorInput.value=label;} quoteMsg.textContent = (store.isDemo()?'Cotação simulada: ':'Cotação atual: ')+money(p); quoteMsg.dataset.price = p; if (!price.value) price.value = p.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+     catch (e) { quoteMsg.textContent = e.message; delete quoteMsg.dataset.price; }
+   }
+   const msg = h('p.form-msg', { role: 'alert' });
+@@ -540,7 +541,7 @@
+   if (!list.length) return toast('Nenhum ativo de bolsa na carteira.');
+   let ok = 0, last = '';
+   for (const x of list) { try { const quote = await fetchQuoteDetails(x.name), p=quote.price; store.commit(s => { const y = s.investments.find(k => k.id === x.id); if (y) { y.marketPrice = p; y.quoteAt = today(); if(quote.sector)y.quoteSector=quote.sector; } }, { reason: 'quotes' }); ok++; } catch (e) { last = e.message; } }
+-  toast(ok ? `${ok} cotação(ões) atualizada(s)` : last);
++  toast(ok ? `${ok} cotação(ões) ${store.isDemo()?'simulada(s) na demonstração':'atualizada(s)'}` : last);
+ }
+ 
+ /* ---------------------------------------------------------------- */
+--- a/bivvo_1139/js/views/you.js
++++ b/bivvo_1139/js/views/you.js
+@@ -284,7 +284,7 @@
+   const pushBox = h('div.notify-push');
+   const paintPush = () => {
+     pushBox.replaceChildren();
+-    if (ctx.demo) { pushBox.append(h('p.muted.sm', 'Na demonstração os avisos ficam desligados. Crie sua conta para receber.')); return; }
++    if (ctx.demo) { pushBox.append(h('p.muted.sm','Demonstração: configure e veja uma prévia; nenhum aviso será enviado.'),h('label.field',h('span','Horário do lembrete'),hours),values,h('button.btn',{type:'button',onclick:()=>openSheet({title:'Prévia do aviso',content:h('div',h('b','Bivvo · Hora de cuidar do seu dinheiro'),h('p','Confira suas próximas contas e seu limite para hoje.'),h('small','Exemplo fictício. Horário escolhido: '+hours.value+':00'))})},'Testar aviso')); return; }
+     if (!sup.ok && !sup.needsInstall) { pushBox.append(h('p.muted.sm', 'Este navegador não recebe avisos. No celular, use o Bivvo instalado na tela inicial.')); return; }
+     if (sup.needsInstall) { pushBox.append(h('p.muted.sm', 'No iPhone, os avisos só funcionam com o Bivvo instalado na Tela de Início (iOS 16.4 ou mais novo).'), h('button.btn.primary.block', { type: 'button', onclick: () => openInstallGuide('ios') }, 'Ver como instalar')); return; }
+     const active = pushActive();
+@@ -297,7 +297,7 @@
+   async function on() { status.textContent = 'Ativando…'; try { await enablePush({ hour: Number(hours.value), showValues: values.input.checked }); status.textContent = ''; toast('Avisos ativados'); paintPush(); } catch (e) { status.textContent = e.message; } }
+   async function off() { try { await disablePush(); toast('Avisos desligados neste aparelho'); paintPush(); } catch (e) { status.textContent = e.message; } }
+   async function test() { status.textContent = 'Enviando…'; try { await sendTest(); status.textContent = 'Teste enviado. Deve chegar em alguns segundos.'; } catch (e) { status.textContent = e.message; } }
+-  const persist = () => { if (pushActive()) savePrefs({ hour: Number(hours.value), showValues: values.input.checked }).then(() => toast('Preferência salva')).catch(e => { status.textContent = e.message; }); };
++  const persist = () => { if(ctx.demo)return; if (pushActive()) savePrefs({ hour: Number(hours.value), showValues: values.input.checked }).then(() => toast('Preferência salva')).catch(e => { status.textContent = e.message; }); };
+   hours.addEventListener('change', persist); values.input.addEventListener('change', persist);
+   if (!ctx.demo && cloud.currentUser()) readPrefs().then(p => { if (p) { hours.value = String(p.hour ?? 20); values.input.checked = !!p.show_values; } }).catch(() => {});
+   paintPush();
+--- a/bivvo_1139/js/views/stories.js
++++ b/bivvo_1139/js/views/stories.js
+@@ -424,7 +424,8 @@
+     h('small.muted', 'Limite de até 4 recompensas de 30 dias em um período de 12 meses. Uma conta indicada só pode gerar uma ativação.')
+   ];
+   openSheet({ title: '🎁 Indique e ganhe Pro', subtitle: 'Cresça com o Bivvo e ganhe tempo de Pro.', content });
+-  if (ctx.demo || !u) { status.replaceChildren(h('p.muted', 'Entre em uma conta para gerar seu link e acompanhar as indicações.')); return code; }
++  if(ctx.demo){status.replaceChildren(h('div.referral-progress',h('b','Demonstração · 2 de 3 amigos ativados'),h('p','Progresso fictício para testar a tela de indicações. Nenhuma recompensa real é gerada.')));return code;}
++  if (!u) { status.replaceChildren(h('p.muted', 'Entre em uma conta para gerar seu link e acompanhar as indicações.')); return code; }
+   track('referral_center_viewed');
+   try {
+     const r=await fetch('/api/referral-status',{headers:{Authorization:'Bearer '+await cloud.accessToken()}}), j=await r.json();
+--- a/bivvo_1139/js/views/scanconfirm.js
++++ b/bivvo_1139/js/views/scanconfirm.js
+@@ -32,7 +32,7 @@
+   const careful = d.mismatch || d.confidence < 0.7 || d.value == null;
+   const msg = h('p.form-msg', { role: 'alert' });
+   const sheet = openSheet({
+-    title: 'Confirmar lançamento', subtitle: 'Lido do comprovante. Confira antes de salvar.',
++    title: 'Confirmar lançamento', subtitle: d.demo?'Comprovante fictício para testar a conferência e o lançamento.':'Lido do comprovante. Confira antes de salvar.',
+     content: h('div.form.scan-confirm',
+       h('div.scan-read' + (careful ? '.warn' : ''), h('small', 'Valor lido no comprovante'), h('b', d.valueText || (d.value != null ? money(d.value) : 'não identificado')), careful ? h('small', d.value == null ? 'Não consegui ler o valor. Digite abaixo.' : 'Confira o valor com atenção: a leitura não ficou totalmente clara.') : null),
+       field('Valor da compra', value), field('Descrição', desc), h('div.row2', field('Categoria', cat), field('Data', date)), field('Forma de pagamento', method), creditRow, msg,
+--- a/bivvo_1139/index.html
++++ b/bivvo_1139/index.html
+@@ -252,8 +252,9 @@
+ <!-- DEMONSTRAÇÃO -->
+ <div class="demo-bar" hidden="" id="demoBar">
+ <span>
+-      Demonstração com dados fictícios
++      Demonstração completa · 6 meses · dados fictícios
+     </span>
++<button id="demoReset" type="button">Recomeçar demonstração</button>
+ <button id="demoSignup" type="button">
+       Criar minha conta
+     </button>
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1338,3 +1338,8 @@
+ .invest-ring-legend span{overflow-wrap:anywhere}.invest-ring-legend small{color:var(--ink-2);white-space:nowrap}
+ .invest-allocation>.hint{margin-top:20px}
+ @media(max-width:700px){.invest-ring-grid{grid-template-columns:1fr;gap:28px}.dividend-card>.card-head{flex-wrap:wrap;gap:12px}.invest-chart-controls select{min-width:120px}.invest-ring>svg{max-width:300px}.dividend-summary{gap:10px;flex-direction:column}}
++/* Demonstração completa: faixa e ações também cabem no celular. */
++.demo-bar{flex-wrap:wrap}
++.demo-bar>span{flex:1 1 260px}
++.demo-bar button{max-width:100%;white-space:normal}
++@media(max-width:600px){.demo-bar{font-size:.76rem}.demo-bar>span{flex-basis:100%}.demo-bar button{flex:1;font-size:.72rem;padding:7px 9px}}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-11-auto-sectors';
++const VERSION = 'bivvo-v11-41-12-full-demo';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- /dev/null
++++ b/bivvo_1139/js/demo-family.js
+@@ -0,0 +1,26 @@
++/* Espaço familiar fictício. Somente memória do estado de demonstração. */
++import * as store from './store.js';
++import { uid } from './util.js';
++export function demoFamily(){
++ const s=store.getState();
++ if(!s.profile.demoFamily){
++  const me={id:'demo-owner',user_id:'demo-ana',display_name:'Ana',role:'owner'};
++  s.profile.demoFamily={active:true,family:{id:'demo-family',name:'Família de demonstração'},membership:me,members:[me,{id:'demo-editor',user_id:'demo-lucas',display_name:'Lucas',role:'editor'}],shared:s.transactions.filter(t=>t.type==='expense'&&t.cat==='Moradia').slice(-6).map(t=>({id:uid(),user_id:me.user_id,source_id:t.id,date:t.date,description:t.desc,category:t.cat,type:t.type,value:t.value}))};
++ }
++ return s.profile.demoFamily;
++}
++export function demoFamilyCall(action,body={}){
++ let d=demoFamily();
++ if(action==='get')return {data:d};
++ if(action==='invite')return {code:'DEMO-'+body.role,simulated:true};
++ store.commit(s=>{
++  if(action==='create'||action==='accept'){d.family.name=body.name||'Família de demonstração';d.active=true;}
++  if(action==='role'){const m=d.members.find(x=>x.id===body.memberId);if(m&&m.role!=='owner')m.role=body.role;}
++  if(action==='remove'){const m=d.members.find(x=>x.id===body.memberId);d.members=d.members.filter(x=>x.id!==body.memberId);if(m)d.shared=d.shared.filter(x=>x.user_id!==m.user_id);}
++  if(action==='share_transaction'){const t=body.transaction;d.shared=d.shared.filter(x=>x.source_id!==t.sourceId);d.shared.push({id:uid(),source_id:t.sourceId,user_id:d.membership.user_id,date:t.date,description:t.desc,category:t.cat,type:t.type,value:t.value});}
++  if(action==='unshare_transaction')d.shared=d.shared.filter(x=>x.source_id!==body.sourceId);
++  if(action==='leave')d.active=false;
++  s.profile.demoFamily=d;
++ },{reason:'demo-family'});
++ return {data:d,simulated:true};
++}
+--- /dev/null
++++ b/bivvo_1139/tests/demo-data.test.mjs
+@@ -0,0 +1,28 @@
++import assert from 'node:assert/strict';
++const RealDate=Date;
++let now=new RealDate(2026,9,22,12).getTime();
++globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};
++globalThis.window={addEventListener(){}};
++globalThis.sessionStorage={getItem(){return null},setItem(){},removeItem(){}};
++globalThis.localStorage=globalThis.sessionStorage;
++const {buildDemo}=await import('../js/demo.js');
++const F=await import('../js/finance.js');
++const store=await import('../js/store.js');
++const {addMonthsYM,ymOf,today}=await import('../js/util.js');
++for(const [y,m,d] of [[2026,9,22],[2027,0,1],[2028,1,29],[2026,11,31]]){
++ now=new RealDate(y,m,d,12).getTime();
++ const s=buildDemo();store.load(s,{demo:true});
++ assert(s.loans.length>=15);assert(s.investments.length>=15);assert(s.loanPayments.length>=15);
++ assert(s.transactions.filter(F.isSpend).length>=15);assert(s.transactions.filter(F.isRealIncome).length>=15);
++ const ids=s.transactions.map(t=>t.id);assert.equal(new Set(ids).size,ids.length);
++ assert(s.transactions.every(t=>t.desc&&t.cat&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)&&Number.isFinite(t.value)&&t.value>=0));
++ for(let i=0;i<6;i++){
++  const ym=addMonthsYM(ymOf(today()),-i),summary=F.monthSummary(ym,store.getState());
++  assert(F.monthTx(ym,store.getState()).length>=15);
++  assert(summary.income>0);assert(summary.spend>0);
++  assert(s.loans.some(l=>l.due.startsWith(ym)));
++  assert(s.investments.some(x=>x.purchaseDate.startsWith(ym)));
++ }
++ assert(s.investments.every(x=>s.transactions.some(t=>t.id===x.txId&&t.investmentId===x.id&&F.isSave(t))));
++}
++console.log('OK: seis meses e mínimos por grupo, IDs únicos, valores válidos, vínculos de investimentos e datas em início/fim de mês, virada do ano e ano bissexto.');

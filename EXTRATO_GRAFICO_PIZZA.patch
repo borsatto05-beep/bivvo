@@ -1,0 +1,143 @@
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -9,7 +9,8 @@
+ import { monthSwitcher } from './extrato.js';
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
+-import { donut, pie } from '../charts.js';
++import { donut } from '../charts.js';
++import { budgetReport } from './budget-report.js';
+ 
+ let tab = 'orcamento';
+ const TABS = [{ value: 'orcamento', label: 'Orçamento' }, { value: 'metas', label: 'Metas' }, { value: 'desafios', label: 'Desafios' }, { value: 'fixas', label: 'Contas fixas' }, { value: 'assinaturas', label: 'Assinaturas' }, { value: 'investimentos', label: 'Investimentos' }];
+@@ -36,40 +37,7 @@
+     progress(sm.saved, target, 'good'),
+     h('p.hint', 'Conta como guardado: dinheiro movido para metas, reserva e investimentos.')));
+ 
+-  const spending=sm.cats.filter(c=>c.value>0).map(c=>({label:c.cat,value:c.value}));
+-  const spent=round2(spending.reduce((sum,c)=>sum+c.value,0));
+-  const limits=round2(rows.reduce((sum,r)=>sum+r.limit,0));
+-  const coveredSpent=round2(rows.reduce((sum,r)=>sum+r.spent,0));
+-  const remaining=round2(limits-coveredSpent);
+-  const exceeded=rows.filter(r=>r.spent>r.limit);
+-  const top=spending[0];
+-  const showCategory=item=>{
+-    const row=rows.find(r=>r.cat===item.label);
+-    openSheet({title:item.label,subtitle:monthLabel(ym),content:h('div',
+-      h('div.stats',stat('Gasto no mês',money(item.value)),
+-        stat('Parte dos gastos',(item.share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'),
+-        row?stat('Limite mensal',money(row.limit)):null),
+-      item.members?h('div.budget-group-detail',item.members.map(c=>h('div',h('span',c.label),h('b',money(c.value))))):
+-        h('p.notice',row?(row.left<0?money(-row.left)+' acima do limite.':money(row.left)+' disponível nesta categoria.'):'Esta categoria ainda não tem limite definido.'))});
+-  };
+-  root.append(h('section.card.budget-chart',
+-    h('div.budget-report-head',
+-      h('span.eyebrow','SEU DINHEIRO EM DETALHES'),
+-      h('h3','Para onde foi seu orçamento?'),
+-      h('p.budget-report-month',monthLabel(ym)),
+-      h('div.budget-report-total',money(spent)),
+-      h('p.muted.sm','em gastos registrados no mês')),
+-    h('div.budget-report-kpis',
+-      h('div',h('span','Limites definidos'),h('b',rows.length?money(limits):'Não definidos'),h('small',rows.length+' categorias com limite')),
+-      h('div',h('span','Gasto nas categorias com limite'),h('b',money(coveredSpent)),h('small','Base para acompanhar seu orçamento')),
+-      h('div',{class:remaining<0?'is-over':''},h('span',remaining<0?'Acima dos limites':'Disponível nos limites'),h('b',rows.length?money(Math.abs(remaining)):'—'),h('small','Soma dos limites menos os gastos'))),
+-    pie(spending,{onPick:showCategory}),
+-    spent>0?h('div.budget-report-notes',
+-      h('div',h('span.eyebrow','MAIOR PARTE DOS GASTOS'),h('b',top.label),h('p',money(top.value)+' · '+(top.value/spent*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'% do total do mês.')),
+-      h('div',{class:exceeded.length?'is-over':''},h('span.eyebrow','ATENÇÃO AOS LIMITES'),h('b',rows.length?(exceeded.length?exceeded.length+' categoria'+(exceeded.length>1?'s':'')+' acima do limite':'Tudo dentro dos limites'):'Defina seus limites'),
+-        h('p',exceeded.length?'Excesso somado: '+money(exceeded.reduce((sum,r)=>sum+Math.max(0,-r.left),0))+'.':rows.length?'Acompanhe os valores disponíveis nas categorias abaixo.':'Adicione limites para comparar o planejado com seus gastos.'))):null,
+-    h('p.budget-report-source','Fonte: seus lançamentos e limites no Bivvo. '+(ym===ymOf(today())?'Mês em andamento: gastos até hoje; agendados futuros ficam fora do gráfico.':'Gastos registrados no mês selecionado.')+' Inclui categorias sem limite; valores podem incluir pagamentos pendentes.')));
+-
++  root.append(budgetReport(ym, s, sm));
+ 
+   if (!rows.length) {
+     const sug = F.suggestBudgets(s);
+--- a/bivvo_1139/js/views/extrato.js
++++ b/bivvo_1139/js/views/extrato.js
+@@ -3,9 +3,10 @@
+ import * as store from '../store.js';
+ import * as F from '../finance.js';
+ import { emptyState, segmented, catIcon } from '../ui.js';
+-import { txRow, stat, catBars } from './components.js';
++import { txRow, stat } from './components.js';
+ import { openTxForm } from './forms.js';
+ import { ctx, go, rerender } from '../nav.js';
++import { budgetReport } from './budget-report.js';
+ 
+ const ui = { q: '', kind: 'all', cat: '', view: 'list', day: null };
+ 
+@@ -39,6 +40,8 @@
+     h('div.stats.card.flat', stat('Entradas', money0(sm.income), sm.income > sm.incomePaid ? `${money0(sm.income - sm.incomePaid)} a receber` : null, 'in'), stat(sm.planned ? 'Gastos até hoje' : 'Gastos', money0(sm.spend)),
+       sm.planned ? stat('Agendado', money0(sm.planned), 'contas e parcelas do mês') : stat('Resultado', money0(sm.result), null, sm.result < 0 ? 'neg' : '')));
+ 
++  root.append(budgetReport(ym, s, sm));
++
+   if (!rows.length) {
+     root.append(emptyState({ icon: '🧾', title: `Nada registrado em ${monthLabel(ym).toLowerCase()}`, text: ym > ymOf(today()) ? 'Contas fixas e parcelas aparecem aqui automaticamente.' : 'Registre um gasto para começar a ver para onde vai seu dinheiro.', action: { label: 'Adicionar gasto', fn: () => openTxForm({ mode: 'expense' }) } }));
+     return;
+@@ -46,7 +49,6 @@
+ 
+   if (ui.view === 'cal') { root.append(calendar(ym, rows)); return; }
+ 
+-  if (sm.cats.length) root.append(h('details.card.cats-card', { open: false }, h('summary', h('b', 'Gastos por categoria'), h('span.muted.sm', 'Toque para filtrar')), catBars(sm.cats, sm.spend, { limit: 8, onPick: c => { ui.cat = c; catSel.value = c; paintList(); listHost.scrollIntoView({ behavior: 'smooth' }); } })));
+   const filtersPanel = h('details.filters-card',
+     h('summary', h('span', '☰ Filtros'), h('small.muted', 'Busca, tipo e categoria')),
+     h('div.filters', search, kinds, catSel));
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-4-budget-infographic';
++const VERSION = 'bivvo-v11-41-5-extrato-infographic';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- /dev/null
++++ b/bivvo_1139/js/views/budget-report.js
+@@ -0,0 +1,44 @@
++/* Relatório mensal compartilhado entre Orçamento e Extrato. */
++import { h, money, monthLabel, ymOf, today, round2 } from '../util.js';
++import * as F from '../finance.js';
++import { openSheet } from '../ui.js';
++import { stat } from './components.js';
++import { pie } from '../charts.js';
++
++export function budgetReport(ym, s, sm=F.monthSummary(ym,s)) {
++  const rows=F.budgetRows(ym,s);
++  const spending=sm.cats.filter(c=>c.value>0).map(c=>({label:c.cat,value:c.value}));
++  const spent=round2(spending.reduce((sum,c)=>sum+c.value,0));
++  const limits=round2(rows.reduce((sum,r)=>sum+r.limit,0));
++  const coveredSpent=round2(rows.reduce((sum,r)=>sum+r.spent,0));
++  const remaining=round2(limits-coveredSpent);
++  const exceeded=rows.filter(r=>r.spent>r.limit);
++  const top=spending[0];
++  const showCategory=item=>{
++    const row=rows.find(r=>r.cat===item.label);
++    openSheet({title:item.label,subtitle:monthLabel(ym),content:h('div',
++      h('div.stats',stat('Gasto no mês',money(item.value)),
++        stat('Parte dos gastos',(item.share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'),
++        row?stat('Limite mensal',money(row.limit)):null),
++      item.members?h('div.budget-group-detail',item.members.map(c=>h('div',h('span',c.label),h('b',money(c.value))))):
++        h('p.notice',row?(row.left<0?money(-row.left)+' acima do limite.':money(row.left)+' disponível nesta categoria.'):'Esta categoria ainda não tem limite definido.'))});
++  };
++  return h('section.card.budget-chart',
++    h('div.budget-report-head',
++      h('span.eyebrow','SEU DINHEIRO EM DETALHES'),
++      h('h3','Para onde foi seu orçamento?'),
++      h('p.budget-report-month',monthLabel(ym)),
++      h('div.budget-report-total',money(spent)),
++      h('p.muted.sm','em gastos registrados no mês')),
++    h('div.budget-report-kpis',
++      h('div',h('span','Limites definidos'),h('b',rows.length?money(limits):'Não definidos'),h('small',rows.length+' categorias com limite')),
++      h('div',h('span','Gasto nas categorias com limite'),h('b',money(coveredSpent)),h('small','Base para acompanhar seu orçamento')),
++      h('div',{class:remaining<0?'is-over':''},h('span',remaining<0?'Acima dos limites':'Disponível nos limites'),h('b',rows.length?money(Math.abs(remaining)):'—'),h('small','Soma dos limites menos os gastos'))),
++    pie(spending,{onPick:showCategory}),
++    spent>0?h('div.budget-report-notes',
++      h('div',h('span.eyebrow','MAIOR PARTE DOS GASTOS'),h('b',top.label),h('p',money(top.value)+' · '+(top.value/spent*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'% do total do mês.')),
++      h('div',{class:exceeded.length?'is-over':''},h('span.eyebrow','ATENÇÃO AOS LIMITES'),h('b',rows.length?(exceeded.length?exceeded.length+' categoria'+(exceeded.length>1?'s':'')+' acima do limite':'Tudo dentro dos limites'):'Defina seus limites'),
++        h('p',exceeded.length?'Excesso somado: '+money(exceeded.reduce((sum,r)=>sum+Math.max(0,-r.left),0))+'.':rows.length?'Acompanhe os valores disponíveis nas categorias abaixo.':'Adicione limites para comparar o planejado com seus gastos.'))):null,
++    h('p.budget-report-source','Fonte: seus lançamentos e limites no Bivvo. '+(ym===ymOf(today())?'Mês em andamento: gastos até hoje; agendados futuros ficam fora do gráfico.':'Gastos registrados no mês selecionado.')+' Inclui categorias sem limite; valores podem incluir pagamentos pendentes.'));
++
++}

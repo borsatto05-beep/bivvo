@@ -1,0 +1,198 @@
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -9,7 +9,7 @@
+ import { monthSwitcher } from './extrato.js';
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
+-import { donut } from '../charts.js';
++import { donut, pie } from '../charts.js';
+ 
+ let tab = 'orcamento';
+ const TABS = [{ value: 'orcamento', label: 'Orçamento' }, { value: 'metas', label: 'Metas' }, { value: 'desafios', label: 'Desafios' }, { value: 'fixas', label: 'Contas fixas' }, { value: 'assinaturas', label: 'Assinaturas' }, { value: 'investimentos', label: 'Investimentos' }];
+@@ -35,6 +35,41 @@
+     h('div.stats', stat('Meta do mês', money0(target)), stat('Guardado', money0(sm.saved), null, sm.saved >= target && target > 0 ? 'in' : ''), stat('Falta', money0(Math.max(0, target - sm.saved)))),
+     progress(sm.saved, target, 'good'),
+     h('p.hint', 'Conta como guardado: dinheiro movido para metas, reserva e investimentos.')));
++
++  const spending=sm.cats.filter(c=>c.value>0).map(c=>({label:c.cat,value:c.value}));
++  const spent=round2(spending.reduce((sum,c)=>sum+c.value,0));
++  const limits=round2(rows.reduce((sum,r)=>sum+r.limit,0));
++  const coveredSpent=round2(rows.reduce((sum,r)=>sum+r.spent,0));
++  const remaining=round2(limits-coveredSpent);
++  const exceeded=rows.filter(r=>r.spent>r.limit);
++  const top=spending[0];
++  const showCategory=item=>{
++    const row=rows.find(r=>r.cat===item.label);
++    openSheet({title:item.label,subtitle:monthLabel(ym),content:h('div',
++      h('div.stats',stat('Gasto no mês',money(item.value)),
++        stat('Parte dos gastos',(item.share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'),
++        row?stat('Limite mensal',money(row.limit)):null),
++      item.members?h('div.budget-group-detail',item.members.map(c=>h('div',h('span',c.label),h('b',money(c.value))))):
++        h('p.notice',row?(row.left<0?money(-row.left)+' acima do limite.':money(row.left)+' disponível nesta categoria.'):'Esta categoria ainda não tem limite definido.'))});
++  };
++  root.append(h('section.card.budget-chart',
++    h('div.budget-report-head',
++      h('span.eyebrow','SEU DINHEIRO EM DETALHES'),
++      h('h3','Para onde foi seu orçamento?'),
++      h('p.budget-report-month',monthLabel(ym)),
++      h('div.budget-report-total',money(spent)),
++      h('p.muted.sm','em gastos registrados no mês')),
++    h('div.budget-report-kpis',
++      h('div',h('span','Limites definidos'),h('b',rows.length?money(limits):'Não definidos'),h('small',rows.length+' categorias com limite')),
++      h('div',h('span','Gasto nas categorias com limite'),h('b',money(coveredSpent)),h('small','Base para acompanhar seu orçamento')),
++      h('div',{class:remaining<0?'is-over':''},h('span',remaining<0?'Acima dos limites':'Disponível nos limites'),h('b',rows.length?money(Math.abs(remaining)):'—'),h('small','Soma dos limites menos os gastos'))),
++    pie(spending,{onPick:showCategory}),
++    spent>0?h('div.budget-report-notes',
++      h('div',h('span.eyebrow','MAIOR PARTE DOS GASTOS'),h('b',top.label),h('p',money(top.value)+' · '+(top.value/spent*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'% do total do mês.')),
++      h('div',{class:exceeded.length?'is-over':''},h('span.eyebrow','ATENÇÃO AOS LIMITES'),h('b',rows.length?(exceeded.length?exceeded.length+' categoria'+(exceeded.length>1?'s':'')+' acima do limite':'Tudo dentro dos limites'):'Defina seus limites'),
++        h('p',exceeded.length?'Excesso somado: '+money(exceeded.reduce((sum,r)=>sum+Math.max(0,-r.left),0))+'.':rows.length?'Acompanhe os valores disponíveis nas categorias abaixo.':'Adicione limites para comparar o planejado com seus gastos.'))):null,
++    h('p.budget-report-source','Fonte: seus lançamentos e limites no Bivvo. '+(ym===ymOf(today())?'Mês em andamento: gastos até hoje; agendados futuros ficam fora do gráfico.':'Gastos registrados no mês selecionado.')+' Inclui categorias sem limite; valores podem incluir pagamentos pendentes.')));
++
+ 
+   if (!rows.length) {
+     const sug = F.suggestBudgets(s);
+--- a/bivvo_1139/js/charts.js
++++ b/bivvo_1139/js/charts.js
+@@ -10,3 +10,62 @@
+ }
+ export function bars(items,{onPick}={}){ const max=Math.max(1,...items.map(x=>+x.value||0)); return h('div.viz-bars',{role:'list'},items.map((x,i)=>h('button.viz-bar',{type:'button',role:'listitem',onclick:()=>onPick?.(x),'aria-label':`${x.label}: ${money0(x.value)}`},h('span.viz-bar-label',x.label),h('span.viz-bar-track',h('i',{class:`v${i%6}`,vars:{'--p':`${Math.max(2,x.value/max*100)}%`}})),h('b',money0(x.value))))); }
+ export function progressBar(value,max,label='Progresso'){ const pct=max?Math.min(100,Math.max(0,value/max*100)):0; return h('div.viz-progress',h('div',h('span',label),h('b',`${Math.round(pct)}%`)),h('span.viz-progress-track',h('i',{vars:{'--p':pct+'%'}}))); }
++
++/* Infográfico de orçamento: fatias, chamadas externas e tabela acessível. */
++export function pie(items, { label='Distribuição dos gastos por categoria', onPick }={}) {
++  const entries=items.filter(x=>Number(x.value)>0).sort((a,b)=>b.value-a.value);
++  const total=entries.reduce((sum,x)=>sum+Number(x.value),0);
++  if(!total) return h('div.budget-pie-empty',h('b','Seu mapa de gastos começa aqui'),h('p','Nenhum gasto registrado neste mês. Os lançamentos vão preencher o gráfico automaticamente.'));
++  const palette=['#7840c4','#00876c','#e5b333','#2879c0','#d94778','#e47a36','#5862ad','#8b969d'];
++  const pct=v=>(v*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
++  const grouped=entries.length>8?[...entries.slice(0,7),{label:'Demais categorias',value:entries.slice(7).reduce((s,x)=>s+Number(x.value),0),members:entries.slice(7)}]:entries;
++  const chart=svg('svg',{viewBox:'0 0 900 520',role:'group','aria-label':label,class:'budget-infographic'});
++  const calls=[];
++  let angle=-Math.PI/2;
++  const wrap=(value,max)=>{const result=[];for(const word of value.split(' ')){if(!result.length||result[result.length-1].length+word.length+1>max)result.push(word);else result[result.length-1]+=' '+word;}return result;};
++  grouped.forEach((item,i)=>{
++    const share=Number(item.value)/total,end=angle+share*2*Math.PI,mid=(angle+end)/2,color=palette[i];
++    const pick=()=>onPick?.({...item,share,total});
++    const description=item.label+': '+money0(item.value)+' · '+pct(share);
++    const attrs={fill:color,stroke:'var(--surface)','stroke-width':2,tabindex:'0',role:'button','aria-label':description};
++    const slice=grouped.length===1?svg('circle',{...attrs,cx:450,cy:260,r:198}):svg('path',{...attrs,d:'M 450 260 L '+(450+198*Math.cos(angle))+' '+(260+198*Math.sin(angle))+' A 198 198 0 '+(share>.5?1:0)+' 1 '+(450+198*Math.cos(end))+' '+(260+198*Math.sin(end))+' Z'});
++    slice.append(svg('title',{},description));slice.addEventListener('click',pick);
++    slice.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});
++    chart.append(slice);
++    if(share>=.12){
++      const x=grouped.length===1?450:450+119*Math.cos(mid),y=grouped.length===1?240:260+119*Math.sin(mid);
++      const lines=wrap(item.label,15),dark=i===2;
++      const text=svg('text',{x,y:y-(lines.length-1)*9,'text-anchor':'middle',class:'budget-slice-label',fill:dark?'#282010':'#fff','pointer-events':'none'});
++      lines.forEach((line,j)=>text.append(svg('tspan',{x,dy:j?18:0},line)));
++      text.append(svg('tspan',{x,dy:25,class:'budget-slice-percent'},pct(share)));
++      chart.append(text);
++    }
++    calls.push({item,share,color,mid,x:450+188*Math.cos(mid),y:260+188*Math.sin(mid),right:Math.cos(mid)>=0,pick,description});
++    angle=end;
++  });
++  for(const right of [false,true]){
++    const side=calls.filter(c=>c.right===right).sort((a,b)=>a.y-b.y);
++    side.forEach((c,j)=>{
++      const y=side.length===1?260:74+j*(372/(side.length-1));
++      const x=right?704:12,edge=right?704:196,elbow=right?680:220;
++      chart.append(svg('polyline',{points:c.x+','+c.y+' '+elbow+','+y+' '+edge+','+y,fill:'none',stroke:c.color,'stroke-width':1.5,'stroke-dasharray':'3 3','pointer-events':'none'}),
++        svg('circle',{cx:c.x,cy:c.y,r:3.5,fill:c.color,stroke:'var(--surface)','stroke-width':2,'pointer-events':'none'}));
++      const block=svg('g',{tabindex:'0',role:'button','aria-label':c.description,class:'budget-callout'});
++      block.append(svg('rect',{x,y:y-31,width:184,height:62,rx:10,fill:'var(--surface)',stroke:c.color,'stroke-width':1.5}));
++      const lines=wrap(c.item.label,23);
++      const title=svg('text',{x:x+12,y:y-9,class:'budget-callout-name'});
++      lines.slice(0,2).forEach((line,k)=>title.append(svg('tspan',{x:x+12,dy:k?14:0},line)));
++      block.append(title,svg('text',{x:x+12,y:y+23,class:'budget-callout-value'},pct(c.share)+' · '+money0(c.item.value)));
++      block.addEventListener('click',c.pick);block.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();c.pick();}});
++      chart.append(block);
++    });
++  }
++  const table=h('div.budget-breakdown',{'aria-label':'Detalhamento de todas as categorias'},
++    h('div.budget-breakdown-head',h('span','Categoria'),h('span','Valor'),h('span','% do total')));
++  entries.forEach((item,i)=>{
++    const color=palette[Math.min(i,7)],share=Number(item.value)/total;
++    table.append(h('button',{type:'button',onclick:()=>onPick?.({...item,share,total}),'aria-label':item.label+': '+money0(item.value)+' · '+pct(share)},
++      h('span',h('i',{'aria-hidden':'true',vars:{'--slice-color':color}}),item.label),h('b',money0(item.value)),h('small',pct(share))));
++  });
++  return h('div.budget-pie',h('div.budget-graphic-window',chart),h('p.budget-chart-caption','Toque nas fatias ou nos blocos para ver os detalhes. Percentuais sobre o total de gastos do mês.'),table);
++}
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1223,3 +1223,66 @@
+ body.in-app > .fab-add { isolation: isolate; }
+ body.in-app .view { padding-bottom: 104px; }
+ @media print { body > .fab-add { display: none; } }
++
++
++/* Orçamento em formato de infográfico. */
++.budget-chart{padding:0;overflow:hidden}
++.budget-report-head{text-align:center;padding:30px 20px 22px;background:linear-gradient(150deg,var(--card),var(--sunk));border-bottom:1px solid var(--line)}
++.budget-report-head h3{font-size:clamp(1.4rem,3vw,2rem);line-height:1.15;margin:10px 0}
++.budget-report-month{font-weight:750;color:var(--ink-3);margin:0 0 12px}
++.budget-report-total{font-size:clamp(2rem,5vw,3.1rem);font-weight:850;letter-spacing:-.05em;color:var(--ink)}
++.budget-report-head .muted{margin:5px 0 0}
++.budget-report-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line)}
++.budget-report-kpis>div{display:grid;gap:7px;padding:20px;border-right:1px solid var(--line)}
++.budget-report-kpis>div:last-child{border-right:0}
++.budget-report-kpis span{font-size:.78rem;color:var(--ink-3)}
++.budget-report-kpis b{font-size:1.25rem;overflow-wrap:anywhere}
++.budget-report-kpis small{font-size:.7rem;color:var(--ink-3)}
++.budget-chart .is-over b{color:var(--bad,#c42854)}
++.budget-pie{padding:14px 20px 0}
++.budget-graphic-window{position:relative}
++.budget-infographic{display:block;width:100%;height:auto;overflow:visible}
++.budget-infographic [role=button]{cursor:pointer}
++.budget-infographic [role=button]:hover{filter:brightness(1.08)}
++.budget-infographic [role=button]:focus-visible{outline:none;stroke:var(--ink);stroke-width:3}
++.budget-slice-label{font-size:17px;font-weight:750;paint-order:stroke;stroke:#0002;stroke-width:.6px}
++.budget-slice-percent{font-size:23px;font-weight:850}
++.budget-callout-name{font-size:13px;font-weight:700;fill:var(--ink)}
++.budget-callout-value{font-size:13px;font-weight:800;fill:var(--ink)}
++.budget-chart-caption{text-align:center;color:var(--ink-3);font-size:.74rem;margin:0 0 22px}
++.budget-breakdown{border:1px solid var(--line);border-radius:14px;overflow:hidden}
++.budget-breakdown-head,.budget-breakdown button{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;align-items:center;gap:16px;padding:11px 15px;width:100%;text-align:left}
++.budget-breakdown-head{background:var(--sunk);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
++.budget-breakdown button{border-top:1px solid var(--line);font-size:.84rem}
++.budget-breakdown button:hover{background:var(--sunk)}
++.budget-breakdown button>span{display:flex;gap:9px;align-items:center;overflow-wrap:anywhere}
++.budget-breakdown i{display:inline-block;width:9px;height:9px;flex-shrink:0;border-radius:3px;background:var(--slice-color)}
++.budget-breakdown button b{font-size:.8rem;white-space:nowrap}
++.budget-breakdown small,.budget-breakdown-head span:last-child{text-align:right;color:var(--ink-3)}
++.budget-report-notes{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:20px}
++.budget-report-notes>div{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
++.budget-report-notes .eyebrow{font-size:.64rem;display:block;margin-bottom:8px}
++.budget-report-notes b{font-size:1rem}
++.budget-report-notes p{font-size:.8rem;color:var(--ink-3);margin:7px 0 0}
++.budget-report-source{margin:0;padding:16px 20px;border-top:1px solid var(--line);font-size:.7rem;color:var(--ink-3);line-height:1.6}
++.budget-pie-empty{text-align:center;padding:40px 20px;color:var(--ink-3)}
++.budget-group-detail{display:grid;gap:10px;margin-top:20px}
++.budget-group-detail>div{display:flex;justify-content:space-between;gap:16px}
++@media(max-width:600px){
++.budget-report-head{padding:24px 14px 18px}
++.budget-report-kpis{grid-template-columns:1fr}
++.budget-report-kpis>div{padding:12px 16px;border-right:0;border-bottom:1px solid var(--line);grid-template-columns:1fr auto;gap:5px}
++.budget-report-kpis>div:last-child{border-bottom:0}
++.budget-report-kpis small{grid-column:1/-1}
++.budget-report-kpis b{font-size:1.05rem}
++.budget-pie{padding:18px 12px 0}
++.budget-graphic-window{aspect-ratio:1;overflow:hidden}
++.budget-graphic-window .budget-infographic{position:absolute;width:212%;max-width:none;left:-56%;top:-11.25%}
++.budget-infographic .budget-callout,.budget-infographic polyline{display:none}
++.budget-chart-caption{font-size:.68rem;margin-top:10px}
++.budget-breakdown-head,.budget-breakdown button{grid-template-columns:minmax(0,1fr) auto 48px;gap:8px;padding:11px 10px}
++.budget-breakdown button{font-size:.77rem}
++.budget-breakdown button b{font-size:.75rem}
++.budget-report-notes{grid-template-columns:1fr;padding:16px 12px}
++.budget-report-source{padding:14px}
++}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-2-loan-month';
++const VERSION = 'bivvo-v11-41-4-budget-infographic';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));

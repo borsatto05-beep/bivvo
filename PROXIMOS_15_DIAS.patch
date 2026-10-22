@@ -1,0 +1,46 @@
+--- a/bivvo_1139/js/views/home.js
++++ b/bivvo_1139/js/views/home.js
+@@ -71,6 +71,16 @@
+   left.append(hero);
+   left.append(captureBar());
+ 
++  /* ---------- próximas contas ---------- */
++  const bills = s.transactions.filter(t => t.type === 'expense' && t.method !== 'Crédito' && t.status !== 'Pago' && diffDays(t0, t.date) <= 15).sort((x, y) => x.date.localeCompare(y.date));
++  const incomes = s.transactions.filter(t => F.isRealIncome(t) && t.status !== 'Pago' && diffDays(t0, t.date) <= 15 && t.date >= t0).sort((x, y) => x.date.localeCompare(y.date));
++  if (bills.length || incomes.length) {
++    left.append(h('section.card.upcoming-home', sectionTitle('Próximos 15 dias', { label: 'Calendário', fn: () => go('calendario') }),
++      h('div.list', [...bills.slice(0, 5), ...incomes.slice(0, 2)].sort((x, y) => x.date.localeCompare(y.date)).map(t => txRow(t, { showDate: true }))),
++      bills.length > 5 ? h('p.muted.sm', `E mais ${bills.length - 5} conta(s).`) : null));
++  }
++
++
+   /* Fase 8.19.3 — ativação: chegar ao primeiro valor antes de pedir uso avançado. */
+   const hasIncome = s.fixed.some(x => x.type === 'income') || s.transactions.some(t => F.isRealIncome(t));
+   const hasOpening = s.transactions.some(t => F.isOpening(t));
+@@ -156,15 +166,6 @@
+         invoiceBars(st.next, setPick), pick));
+     }
+   } else right.append(h('button.card.add-card', { type: 'button', onclick: () => openCardForm() }, h('b', 'Usa cartão de crédito?'), h('small', 'Adicione para ver a fatura de cada mês e quanto as parcelas já comprometem.')));
+-
+-  /* ---------- próximas contas ---------- */
+-  const bills = s.transactions.filter(t => t.type === 'expense' && t.method !== 'Crédito' && t.status !== 'Pago' && diffDays(t0, t.date) <= 15).sort((x, y) => x.date.localeCompare(y.date));
+-  const incomes = s.transactions.filter(t => F.isRealIncome(t) && t.status !== 'Pago' && diffDays(t0, t.date) <= 15 && t.date >= t0).sort((x, y) => x.date.localeCompare(y.date));
+-  if (bills.length || incomes.length) {
+-    right.append(h('section.card', sectionTitle('Próximos 15 dias', { label: 'Calendário', fn: () => go('calendario') }),
+-      h('div.list', [...bills.slice(0, 5), ...incomes.slice(0, 2)].sort((x, y) => x.date.localeCompare(y.date)).map(t => txRow(t, { showDate: true }))),
+-      bills.length > 5 ? h('p.muted.sm', `E mais ${bills.length - 5} conta(s).`) : null));
+-  }
+ 
+   /* ---------- Fase 1: Meu Dia / previsão ---------- */
+   const f7 = F.dailyForecast(7, s), f30 = F.dailyForecast(30, s);
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-7-home-order';
++const VERSION = 'bivvo-v11-41-8-upcoming-home';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));

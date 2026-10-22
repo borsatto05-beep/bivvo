@@ -1,0 +1,200 @@
+--- a/bivvo_1139/js/views/forms.js
++++ b/bivvo_1139/js/views/forms.js
+@@ -2,6 +2,7 @@
+ import { h, money, money0, parseMoney, round2, today, addDays, ymOf, monthName, monthLabel, uid, num, shortDate, dayLabel, addMonthsYM, haptic, debounce, splitInstallments } from '../util.js';
+ import * as store from '../store.js';
+ import * as F from '../finance.js';
++import { investmentSector } from '../investment-sectors.js';
+ import { openSheet, confirmSheet, toast, segmented, field, catIcon } from '../ui.js';
+ import { ctx, go } from '../nav.js';
+ import * as cloud from '../cloud.js';
+@@ -450,18 +451,19 @@
+     return (j.stocks || []).slice(0, 12).map(x => [String(x), '']);
+   } catch { const t = term.toUpperCase(); return B3_FALLBACK.filter(([k, n]) => k.includes(t) || n.toUpperCase().includes(t)); }
+ }
+-export async function fetchQuote(ticker) {
++export async function fetchQuoteDetails(ticker) {
+   if (ctx.demo) throw new Error('Cotações em tempo real ficam disponíveis com conta criada.');
+   const token = await cloud.accessToken();
+   const r = await fetch('/api/quote?ticker=' + encodeURIComponent(ticker), { cache: 'no-store', headers: token ? { Authorization: 'Bearer ' + token } : {} });
+   const j = await r.json().catch(() => ({}));
+   if (!r.ok) throw new Error(j.error || 'Cotação indisponível agora.');
+-  return num(j.price);
+-}
++  return {price:num(j.price),sector:typeof j.sector==='string'?j.sector.trim():''};
++}
++export async function fetchQuote(ticker){return (await fetchQuoteDetails(ticker)).price;}
+ export function openInvestmentForm(inv) {
+   const st = { type: inv?.type || 'CDB' };
+   const name = h('input.input', { value: inv?.name || '', maxLength: 40, placeholder: 'Ex.: PETR4, CDB Inter, Tesouro Selic', autocomplete: 'off' });
+-  const sectorInput=h('input.input',{value:inv?.sector||'',maxLength:60,placeholder:'Ex.: Saúde, Bancos, Energia','aria-label':'Setor do investimento'});
++  const sectorInput=h('input.input',{value:inv&&investmentSector(inv)!=='Setor não identificado'?investmentSector(inv):'',maxLength:80,placeholder:'Ex.: Saúde, Bancos, Energia','aria-label':'Setor do investimento'});
+   const sugg = h('div.chips.scroll.sugg');
+   const qty = h('input.input', { type: 'text', inputmode: 'decimal', value: inv?.quantity || '', placeholder: 'Ex.: 10' });
+   const price = moneyInput(inv?.purchasePrice, { label: 'Preço pago por cota' });
+@@ -494,11 +496,11 @@
+   async function getQuote() {
+     const t = name.value.trim().toUpperCase(); if (!t) return;
+     quoteMsg.textContent = 'Buscando cotação…';
+-    try { const p = await fetchQuote(t); quoteMsg.textContent = `Cotação atual: ${money(p)}`; quoteMsg.dataset.price = p; if (!price.value) price.value = p.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
++    try { const quote = await fetchQuoteDetails(t), p=quote.price; if(!sectorInput.value.trim()){const label=investmentSector({name:t,type:st.type,quoteSector:quote.sector});if(label!=='Setor não identificado')sectorInput.value=label;} quoteMsg.textContent = `Cotação atual: ${money(p)}`; quoteMsg.dataset.price = p; if (!price.value) price.value = p.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+     catch (e) { quoteMsg.textContent = e.message; delete quoteMsg.dataset.price; }
+   }
+   const msg = h('p.form-msg', { role: 'alert' });
+-  const form = h('form.form', { onsubmit: e => { e.preventDefault(); save(); } }, h('div.field', h('span', 'Tipo'), seg), market, fixedInc, plain, valueField, field('Setor (opcional)', sectorInput), field('Data da aplicação', date), inv ? null : fromBalance, msg, h('button.hidden-submit', { type: 'submit', tabindex: '-1', 'aria-hidden': 'true' }));
++  const form = h('form.form', { onsubmit: e => { e.preventDefault(); save(); } }, h('div.field', h('span', 'Tipo'), seg), market, fixedInc, plain, valueField, field('Setor (automático; você pode corrigir)', sectorInput), field('Data da aplicação', date), inv ? null : fromBalance, msg, h('button.hidden-submit', { type: 'submit', tabindex: '-1', 'aria-hidden': 'true' }));
+   const footer = [];
+   if (inv) footer.push(h('button.btn.ghost.danger-text', { type: 'button', onclick: () => removeInv() }, 'Resgatar / excluir'));
+   footer.push(h('button.btn.primary', { type: 'button', onclick: () => form.requestSubmit() }, inv ? 'Salvar' : 'Registrar aplicação'));
+@@ -537,7 +539,7 @@
+   const list = S().investments.filter(x => (x.type === 'Ações' || x.type === 'Fundos') && num(x.quantity) > 0);
+   if (!list.length) return toast('Nenhum ativo de bolsa na carteira.');
+   let ok = 0, last = '';
+-  for (const x of list) { try { const p = await fetchQuote(x.name); store.commit(s => { const y = s.investments.find(k => k.id === x.id); if (y) { y.marketPrice = p; y.quoteAt = today(); } }, { reason: 'quotes' }); ok++; } catch (e) { last = e.message; } }
++  for (const x of list) { try { const quote = await fetchQuoteDetails(x.name), p=quote.price; store.commit(s => { const y = s.investments.find(k => k.id === x.id); if (y) { y.marketPrice = p; y.quoteAt = today(); if(quote.sector)y.quoteSector=quote.sector; } }, { reason: 'quotes' }); ok++; } catch (e) { last = e.message; } }
+   toast(ok ? `${ok} cotação(ões) atualizada(s)` : last);
+ }
+ 
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -10,6 +10,7 @@
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
+ import { investmentCharts } from './investment-charts.js';
++import { investmentSector, investmentSectorInfo } from '../investment-sectors.js';
+ import { budgetReport } from './budget-report.js';
+ 
+ let tab = 'orcamento';
+@@ -155,6 +156,8 @@
+       h('div.stats.card.flat', stat('Valor atual', money0(current)), stat('Aplicado', money0(cost)), stat('Resultado', (result >= 0 ? '+' : '') + money0(result), null, result >= 0 ? 'in' : 'neg')),
+       h('div.asset-detail-list',
+         h('div', h('span', 'Tipo'), h('b', first.type || 'Investimento')),
++        h('div', h('span', 'Setor'), h('b', investmentSector(first))),
++        h('div', h('span', 'Origem do setor'), h('b', investmentSectorInfo(first).source)),
+         qtyTotal > 0 ? h('div', h('span', 'Quantidade'), h('b', String(round2(qtyTotal)).replace('.', ','))) : null,
+         first.marketPrice ? h('div', h('span', 'Última cotação'), h('b', money(first.marketPrice))) : null,
+         first.purchasePrice ? h('div', h('span', 'Preço médio registrado'), h('b', money(first.purchasePrice))) : null,
+--- a/bivvo_1139/netlify/functions/quote.js
++++ b/bivvo_1139/netlify/functions/quote.js
+@@ -21,5 +21,5 @@
+   const ticker=String(event.queryStringParameters?.ticker||'').trim().toUpperCase().replace(/\s+/g,'');
+   if(!/^[A-Z0-9.\-]{1,15}$/.test(ticker))return out(400,{error:'Ticker inválido.'});
+   const token=String(process.env.BRAPI_API_KEY||'').trim();if(!token)return out(503,{error:'BRAPI_API_KEY não configurada no servidor.'});
+-  try{const r=await fetch(`https://brapi.dev/api/v2/stocks/quote?symbols=${encodeURIComponent(ticker)}`,{headers:{Authorization:`Bearer ${token}`}});let j=null;try{j=await r.json()}catch(_){}if(!r.ok)return out(r.status===429?429:r.status,{error:r.status===429?'Limite de cotações atingido. Tente novamente.':'Não foi possível consultar este ativo.'});const item=j?.results?.[0],data=item?.data||item||{},price=Number(data.regularMarketPrice??item?.regularMarketPrice);if(!Number.isFinite(price)||price<=0)return out(404,{error:'Ativo sem cotação disponível agora.'});return out(200,{symbol:item?.symbol||ticker,price,change:Number(data.regularMarketChangePercent??0)||0,updatedAt:data.regularMarketTime||new Date().toISOString(),currency:data.currency||'BRL'})}catch(_){return out(500,{error:'Serviço de cotação indisponível.'})}
++  try{const r=await fetch(`https://brapi.dev/api/v2/stocks/quote?symbols=${encodeURIComponent(ticker)}`,{headers:{Authorization:`Bearer ${token}`}});let j=null;try{j=await r.json()}catch(_){}if(!r.ok)return out(r.status===429?429:r.status,{error:r.status===429?'Limite de cotações atingido. Tente novamente.':'Não foi possível consultar este ativo.'});const item=j?.results?.[0],data=item?.data||item||{},price=Number(data.regularMarketPrice??item?.regularMarketPrice);if(!Number.isFinite(price)||price<=0)return out(404,{error:'Ativo sem cotação disponível agora.'});return out(200,{sector:String(data.sector||item?.sector||data.summaryProfile?.sector||item?.summaryProfile?.sector||'').slice(0,80),symbol:item?.symbol||ticker,price,change:Number(data.regularMarketChangePercent??0)||0,updatedAt:data.regularMarketTime||new Date().toISOString(),currency:data.currency||'BRL'})}catch(_){return out(500,{error:'Serviço de cotação indisponível.'})}
+ };
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-10-investment-charts';
++const VERSION = 'bivvo-v11-41-11-auto-sectors';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- a/bivvo_1139/js/views/investment-charts.js
++++ b/bivvo_1139/js/views/investment-charts.js
+@@ -1,12 +1,13 @@
+ /* Proventos registrados e composição atual da carteira. */
+ import { h, s as svg, money, money0, today, ymOf, addMonthsYM, monthShort, monthLabel, num, round2, uid, parseMoney, shortDate } from '../util.js';
+ import * as F from '../finance.js';
++import { investmentSector, investmentSectorInfo } from '../investment-sectors.js';
+ import * as store from '../store.js';
+ import { openSheet, field, toast } from '../ui.js';
+ 
+ const colors=['#07364b','#5baaa0','#9994ae','#b98183','#4a61ef','#e6ad51','#6b83a2','#899b88'];
+ const percent=n=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+-const sector=x=>String(x.sector||'').trim()||'Não informado';
++const sector=investmentSector;
+ const received=t=>F.isPaid(t)&&t.date<=today();
+ export const dividendRows=s=>s.transactions.filter(t=>F.isRealIncome(t)&&(t.cat==='Rendimentos'||t.transactionRole==='investment_dividend')&&!F.isWithdraw(t));
+ export function dividendBuckets(rows,keys,annual=false){
+@@ -103,9 +104,9 @@
+  const bySector=new Map();
+  for(const inv of s.investments){const label=sector(inv),row=bySector.get(label)||{label,value:0,items:[]};row.value+=F.investmentValue(inv,s);row.items.push(inv);bySector.set(label,row);}
+  const sectors=[...bySector.values()].filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
+- const showSector=picked=>openSheet({title:picked.label,subtitle:percent(picked.share)+' da carteira · '+money(picked.value),content:h('div',h('p.hint',picked.label==='Não informado'?'Edite os investimentos para informar o setor de cada ativo.':'Ativos cadastrados neste setor.'),h('div.list',picked.items.map(x=>h('button.tx',{type:'button',onclick:()=>showAsset({label:x.name,items:[x]})},h('span.tx-main',h('b',x.name),h('small',x.type)),h('b',money(F.investmentValue(x,s)))))))});
++ const showSector=picked=>openSheet({title:picked.label,subtitle:percent(picked.share)+' da carteira · '+money(picked.value),content:h('div',h('p.hint',picked.label==='Setor não identificado'?'Edite os investimentos para informar o setor de cada ativo.':'Classificação pelo cadastro, ticker conhecido ou cotação. Classes de investimento são usadas quando não há setor econômico.'),h('div.list',picked.items.map(x=>h('button.tx',{type:'button',onclick:()=>showAsset({label:x.name,items:[x]})},h('span.tx-main',h('b',x.name),h('small',x.type+' · '+investmentSectorInfo(x).source)),h('b',money(F.investmentValue(x,s)))))))});
+  host.append(h('section.card.invest-allocation',h('div.card-head',h('div',h('h3','Composição da carteira'),h('p.hint','Distribuição pelo valor atual dos investimentos.'))),
+   h('div.invest-ring-grid',h('section',h('h4','Por ativo'),ring(assets,'Carteira por ativo',showAsset)),h('section',h('h4','Por setor'),ring(sectors,'Carteira por setor',showSector))),
+-  h('p.hint','Toque nas fatias ou na legenda para ver os detalhes. Setores são informados no cadastro de cada investimento.')));
++  h('p.hint','Toque nas fatias ou na legenda para ver os detalhes. Setores conhecidos são preenchidos automaticamente pelo ticker. Você pode corrigir o setor no cadastro; ativos sem classificação ficam separados.')));
+  return host;
+ }
+--- /dev/null
++++ b/bivvo_1139/js/investment-sectors.js
+@@ -0,0 +1,53 @@
++/* Classificação local de emissores conhecidos. Setor manual sempre tem prioridade. */
++const groups={
++ 'Bancos':['BBAS','BBDC','ITUB','SANB','BPAC','ABCB','BRSR','BMGB','BPAN','PINE'],
++ 'Serviços financeiros':['B3SA','ITSA','CIEL','PSSA','BBSE','CXSE','IRBR'],
++ 'Petróleo e gás':['PETR','PRIO','RECV','BRAV','CSAN','UGPA','VBBR'],
++ 'Mineração':['VALE','CMIN','BRAP'],
++ 'Siderurgia':['CSNA','GGBR','GOAU','USIM','FESA'],
++ 'Energia elétrica':['TAEE','EGIE','CPFE','CMIG','CPLE','ENEV','ENGI','EQTL','NEOE','AURE','ALUP','AFLT','AXIA','ELET'],
++ 'Saúde':['HAPV','HYPE','RDOR','FLRY','DASA','ODPV','QUAL','PNVL','RADL'],
++ 'Saneamento':['SBSP','SAPR','CSMG','ORVR'],
++ 'Telecomunicações':['VIVT','TIMS','FIQE'],
++ 'Alimentos e bebidas':['ABEV','JBSS','JBSS32','BEEF','MRFG','BRFS','MDIA','SMTO','CAML','SLCE','AGRO','TTEN','SOJA'],
++ 'Varejo':['MGLU','LREN','AMER','BHIA','ASAI','CRFB','PETZ','CEAB','AZZA','VIVA','GMAT','GRND','ARZZ'],
++ 'Indústria':['INTB','WEGE','EMBR','TUPY','RAPT','FRAS','POMO','ROMI','LEVE','SHUL','KEPL'],
++ 'Papel e celulose':['SUZB','KLBN','RANI'],
++ 'Construção e imóveis':['CYRE','MRVE','DIRR','EZTC','EVEN','TEND','TRIS','CURY','JHSF','MULT','IGTI','ALOS','LOGG'],
++ 'Transportes e logística':['RAIL','RUMO','CCRO','MOTV','ECOR','STBP','HBSA','TGMA','PORT','VAMO','RENT','MOVI','SIMH'],
++ 'Tecnologia':['TOTS','LWSA','POSI','BMOB','SQIA'],
++ 'Educação':['YDUQ','COGN','ANIM','CSED'],
++ 'Química e petroquímica':['BRKM','UNIP','DEXP','FHER'],
++ 'Madeira e papel':['DXCO','EUCA'],
++ 'Fundos imobiliários · recebíveis':['MXRF11','KNCR11','KNIP11','KNSC11','CPTS11','RBRR11','RBRY11','HGCR11','IRDM11','IRIM11','VGIR11','VGIP11','RECR11','MCCI11','CVBI11'],
++ 'Fundos imobiliários · logística':['HGLG11','BTLG11','XPLG11','VILG11','LVBI11','BRCO11','HSLG11','GGRC11','PATL11'],
++ 'Fundos imobiliários · shopping centers':['XPML11','VISC11','HGBS11','HSML11','MALL11','ABCP11'],
++ 'Fundos imobiliários · escritórios':['PVBI11','HGRE11','JSRE11','VINO11','RCRB11','RECT11'],
++ 'Fundos imobiliários · diversificados':['KNRI11','HGRU11','TRXF11','ALZR11','RBVA11','RZTR11','GARE11'],
++ 'ETFs · ações brasileiras':['BOVA11','BOVV11','SMAL11','DIVO11','BOVB11','BRAX11','BBOV11','PIBB11','NDIV11'],
++ 'ETFs · ações internacionais':['IVVB11','SPXI11','WRLD11','NASD11','ACWI11','SPXB11'],
++ 'ETFs · renda fixa':['IMAB11','B5P211','IRFM11','LFTS11','B5MB11'],
++ 'ETFs · criptoativos':['HASH11','QBTC11','QETH11']
++};
++const catalog=new Map(Object.entries(groups).flatMap(([sector,keys])=>keys.map(key=>[key,sector])));
++const translations={
++ 'Financial Services':'Serviços financeiros','Financials':'Serviços financeiros','Energy':'Petróleo e gás','Utilities':'Serviços de utilidade pública',
++ 'Healthcare':'Saúde','Health Care':'Saúde','Basic Materials':'Materiais básicos','Materials':'Materiais básicos',
++ 'Industrials':'Indústria','Technology':'Tecnologia','Information Technology':'Tecnologia','Real Estate':'Imóveis',
++ 'Communication Services':'Telecomunicações e comunicação','Consumer Defensive':'Consumo não cíclico','Consumer Staples':'Consumo não cíclico',
++ 'Consumer Cyclical':'Consumo cíclico','Consumer Discretionary':'Consumo cíclico'
++};
++const valid=v=>typeof v==='string'&&v.trim()&&!['não informado','nao informado','n/a','unknown','setor não identificado'].includes(v.trim().toLowerCase());
++export function investmentSectorInfo(x){
++ if(valid(x.sector))return {label:x.sector.trim(),source:'Informado no cadastro'};
++ const raw=String(x.ticker||x.symbol||x.name||'').trim().toUpperCase().replace(/\.SA$/,'');
++ const ticker=raw.match(/\b[A-Z][A-Z0-9]{3}[0-9]{1,2}\b/)?.[0]||raw;
++ const known=catalog.get(ticker)||(/^[A-Z][A-Z0-9]{3}\d{1,2}$/.test(ticker)?catalog.get(ticker.replace(/\d{1,2}$/, '')):null);
++ if(known)return {label:known,source:'Classificação local do ticker '+ticker};
++ if(valid(x.quoteSector))return {label:translations[x.quoteSector]||x.quoteSector.trim(),source:'Informado pelo provedor de cotações'};
++ if(['CDB','Renda fixa'].includes(x.type))return {label:'Renda fixa',source:'Classe do investimento'};
++ if(x.type==='Poupança')return {label:'Poupança',source:'Classe do investimento'};
++ if(x.type==='Cripto')return {label:'Criptoativos',source:'Classe do investimento'};
++ return {label:'Setor não identificado',source:'Informe o setor ao editar o investimento'};
++}
++export const investmentSector=x=>investmentSectorInfo(x).label;
+--- /dev/null
++++ b/bivvo_1139/tests/investment-sectors.test.mjs
+@@ -0,0 +1,16 @@
++import assert from 'node:assert/strict';
++import { investmentSector, investmentSectorInfo } from '../js/investment-sectors.js';
++assert.equal(investmentSector({name:'USIM5',type:'Ações'}),'Siderurgia');
++assert.equal(investmentSector({name:'HYPE3',type:'Ações'}),'Saúde');
++assert.equal(investmentSector({name:'B3SA3',type:'Ações'}),'Serviços financeiros');
++assert.equal(investmentSector({name:'PETR4.SA',type:'Ações'}),'Petróleo e gás');
++assert.equal(investmentSector({name:'Minha posição VALE3',type:'Ações'}),'Mineração');
++assert.equal(investmentSector({name:'MXRF11',type:'Fundos'}),'Fundos imobiliários · recebíveis');
++assert.equal(investmentSector({name:'IVVB11',type:'Fundos'}),'ETFs · ações internacionais');
++assert.equal(investmentSector({name:'CDB Banco',type:'CDB'}),'Renda fixa');
++assert.equal(investmentSector({name:'USIM5',sector:'Setor personalizado',quoteSector:'Healthcare'}),'Setor personalizado');
++assert.equal(investmentSector({name:'USIM5',sector:'Não informado'}),'Siderurgia');
++assert.equal(investmentSector({name:'ZZZZ3',quoteSector:'Healthcare'}),'Saúde');
++assert.equal(investmentSector({name:'ZZZZ3'}),'Setor não identificado');
++assert.match(investmentSectorInfo({name:'USIM5'}).source,/ticker USIM5/);
++console.log('OK: identificação de tickers antigos, classes, metadados, prioridade manual, rótulos vazios e desconhecidos.');

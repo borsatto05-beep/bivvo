@@ -1,0 +1,96 @@
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -9,7 +9,7 @@
+ import { monthSwitcher } from './extrato.js';
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
+-import { donut } from '../charts.js';
++import { donut, pie } from '../charts.js';
+ 
+ let tab = 'orcamento';
+ const TABS = [{ value: 'orcamento', label: 'Orçamento' }, { value: 'metas', label: 'Metas' }, { value: 'desafios', label: 'Desafios' }, { value: 'fixas', label: 'Contas fixas' }, { value: 'assinaturas', label: 'Assinaturas' }, { value: 'investimentos', label: 'Investimentos' }];
+@@ -35,6 +35,18 @@
+     h('div.stats', stat('Meta do mês', money0(target)), stat('Guardado', money0(sm.saved), null, sm.saved >= target && target > 0 ? 'in' : ''), stat('Falta', money0(Math.max(0, target - sm.saved)))),
+     progress(sm.saved, target, 'good'),
+     h('p.hint', 'Conta como guardado: dinheiro movido para metas, reserva e investimentos.')));
++
++  const spending=sm.cats.filter(c=>c.value>0).map(c=>({label:c.cat,value:c.value}));
++  root.append(h('section.card.budget-chart',
++    h('div.card-head',h('h3','Gastos por categoria'),h('b',money(spending.reduce((sum,c)=>sum+c.value,0)))),
++    h('p.muted.sm','Distribuição dos gastos de '+monthLabel(ym).toLowerCase()+'.'),
++    pie(spending,{onPick:item=>{
++      const row=rows.find(r=>r.cat===item.label);
++      openSheet({title:item.label,subtitle:monthLabel(ym),content:h('div.stats',
++        stat('Gasto no mês',money(item.value)),
++        stat('Parte dos gastos',(item.share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'),
++        row?stat('Limite mensal',money(row.limit)):h('p.muted','Categoria sem limite definido.'))});
++    }})));
+ 
+   if (!rows.length) {
+     const sug = F.suggestBudgets(s);
+--- a/bivvo_1139/js/charts.js
++++ b/bivvo_1139/js/charts.js
+@@ -10,3 +10,31 @@
+ }
+ export function bars(items,{onPick}={}){ const max=Math.max(1,...items.map(x=>+x.value||0)); return h('div.viz-bars',{role:'list'},items.map((x,i)=>h('button.viz-bar',{type:'button',role:'listitem',onclick:()=>onPick?.(x),'aria-label':`${x.label}: ${money0(x.value)}`},h('span.viz-bar-label',x.label),h('span.viz-bar-track',h('i',{class:`v${i%6}`,vars:{'--p':`${Math.max(2,x.value/max*100)}%`}})),h('b',money0(x.value))))); }
+ export function progressBar(value,max,label='Progresso'){ const pct=max?Math.min(100,Math.max(0,value/max*100)):0; return h('div.viz-progress',h('div',h('span',label),h('b',`${Math.round(pct)}%`)),h('span.viz-progress-track',h('i',{vars:{'--p':pct+'%'}}))); }
++
++/* Pizza com legenda e acesso por teclado. */
++export function pie(items, { label='Gastos por categoria', onPick }={}) {
++  const entries=items.filter(x=>Number(x.value)>0), total=entries.reduce((sum,x)=>sum+Number(x.value),0);
++  if(!total) return h('p.muted', 'Nenhum gasto registrado neste mês.');
++  const chart=svg('svg',{viewBox:'0 0 200 200',role:'group','aria-label':label});
++  const legend=h('div.budget-pie-legend');
++  let angle=-Math.PI/2;
++  entries.forEach((item,i)=>{
++    const share=Number(item.value)/total, end=angle+share*2*Math.PI;
++    const color='hsl('+((275+i*137.508)%360).toFixed(1)+' 62% 48%)';
++    const description=item.label+': '+money0(item.value)+' · '+(share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
++    const pick=()=>onPick?.({...item,share,total});
++    const attrs={fill:color,stroke:'var(--card)', 'stroke-width':1.5,tabindex:'0',role:'button','aria-label':description};
++    const slice=entries.length===1
++      ?svg('circle',{...attrs,cx:100,cy:100,r:94})
++      :svg('path',{...attrs,d:'M 100 100 L '+(100+94*Math.cos(angle))+' '+(100+94*Math.sin(angle))+' A 94 94 0 '+(share>.5?1:0)+' 1 '+(100+94*Math.cos(end))+' '+(100+94*Math.sin(end))+' Z'});
++    slice.append(svg('title',{},description));
++    slice.addEventListener('click',pick);
++    slice.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}});
++    chart.append(slice);
++    legend.append(h('button',{type:'button',onclick:pick,'aria-label':description},
++      h('i',{'aria-hidden':'true',vars:{'--slice-color':color}}),h('span',item.label),
++      h('b',money0(item.value)),h('small',(share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%')));
++    angle=end;
++  });
++  return h('div.budget-pie',chart,legend);
++}
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1223,3 +1223,18 @@
+ body.in-app > .fab-add { isolation: isolate; }
+ body.in-app .view { padding-bottom: 104px; }
+ @media print { body > .fab-add { display: none; } }
++
++/* Orçamento: distribuição dos gastos do mês. */
++.budget-pie{display:grid;grid-template-columns:minmax(180px,280px) minmax(0,1fr);gap:24px;align-items:center;margin-top:16px}
++.budget-pie>svg{width:100%;max-width:280px;justify-self:center;overflow:visible}
++.budget-pie svg [role=button]{cursor:pointer;transition:opacity .15s}
++.budget-pie svg [role=button]:hover{opacity:.8}
++.budget-pie svg [role=button]:focus-visible{outline:none;stroke:var(--ink);stroke-width:3}
++.budget-pie-legend{display:grid;gap:6px;min-width:0}
++.budget-pie-legend button{display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;gap:10px;align-items:center;text-align:left;padding:9px;border-radius:10px;width:100%}
++.budget-pie-legend button:hover{background:var(--sunk)}
++.budget-pie-legend i{background:var(--slice-color);width:10px;height:10px;border-radius:50%}
++.budget-pie-legend span{overflow-wrap:anywhere;font-size:.85rem}
++.budget-pie-legend b{font-size:.82rem;white-space:nowrap}
++.budget-pie-legend small{color:var(--ink-3);min-width:44px;text-align:right}
++@media(max-width:600px){.budget-pie{grid-template-columns:minmax(0,1fr);gap:12px}.budget-pie>svg{max-width:230px}.budget-chart>.card-head{flex-wrap:wrap;gap:8px}.budget-pie-legend button{gap:8px;padding:8px 0}}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-2-loan-month';
++const VERSION = 'bivvo-v11-41-3-budget-pie';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));

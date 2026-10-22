@@ -1,0 +1,104 @@
+--- a/bivvo_1139/js/views/home.js
++++ b/bivvo_1139/js/views/home.js
+@@ -14,6 +14,7 @@
+ import { openCopilot } from './copilot.js';
+ import { financialControlDetector } from '../copilot.js';
+ import { recoveryHomeCard } from './recovery.js';
++import { openHomeMonthDetail } from './home-month-detail.js';
+ 
+ function greeting(name) {
+   const hr = new Date().getHours();
+@@ -134,9 +135,12 @@
+   left.append(h('section.card.month', { 'aria-label': 'Resumo do mês' },
+     h('div.card-head', h('h3', 'Seu ' + monthName(cur)), h('button.link.sm', { type: 'button', onclick: () => openRetrospective(cur) }, 'Ver meu mês')),
+     h('div.stats',
+-      stat('Entrou', money0(a.incomePaid), a.income > a.incomePaid ? `+${money0(a.income - a.incomePaid)} a receber` : null, 'in'),
+-      stat('Gastei', money0(a.spend), cmp == null ? (a.planned ? `+${money0(a.planned)} agendado` : null) : `${cmp <= 0 ? '' : '+'}${Math.round(cmp * 100)}% vs. mesmo período`, cmp != null && cmp > 0.1 ? 'warn' : ''),
+-      stat('Guardei', money0(a.saved), a.income ? `${Math.round(a.saved / a.income * 100)}% da renda` : null)),
++      h('button.month-stat', {type:'button','aria-haspopup':'dialog','aria-label':'Entrou: ver origem do valor',onclick:()=>openHomeMonthDetail('income',cur,s)},
++        stat('Entrou', money0(a.incomePaid), a.income > a.incomePaid ? `+${money0(a.income-a.incomePaid)} a receber` : null, 'in')),
++      h('button.month-stat', {type:'button','aria-haspopup':'dialog','aria-label':'Gastei: ver origem do valor',onclick:()=>openHomeMonthDetail('spend',cur,s)},
++        stat('Gastei', money0(a.spend), cmp == null ? (a.planned ? `+${money0(a.planned)} agendado` : null) : `${cmp<=0?'':'+'}${Math.round(cmp*100)}% vs. mesmo período`, cmp!=null&&cmp>.1?'warn':'')),
++      h('button.month-stat', {type:'button','aria-haspopup':'dialog','aria-label':'Guardei: ver origem do valor',onclick:()=>openHomeMonthDetail('saved',cur,s)},
++        stat('Guardei', money0(a.saved), a.income ? `${Math.round(a.saved/a.income*100)}% da renda` : null))),
+     a.cats.length ? h('div.mini-cats', a.cats.slice(0, 4).map(c => h('span', { vars: { '--w': Math.max(6, c.share * 100) + '%' } }, h('i'), `${c.cat} ${Math.round(c.share * 100)}%`))) : null));
+ 
+   /* ---------- fechamento do mês anterior (primeira semana) ---------- */
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1299,3 +1299,13 @@
+ .budget-limits-action{padding:0 20px 20px}
+ .budget-limits-action .btn{width:100%}
+ @media(max-width:420px){.category-purchase-list li{padding:12px;gap:10px}.category-purchase-list strong{font-size:.8rem}}
++
++/* Indicadores mensais: toque para conferir a origem. */
++.month-stat{text-align:left;border-radius:10px;min-width:0;padding:6px;margin:-6px;transition:background .15s}
++.month-stat:hover{background:var(--sunk)}
++.month-stat .stat>b{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:5px}
++.month-origin{display:grid;gap:18px}
++.month-origin-section{display:grid;gap:10px}
++.month-origin-section h3{font-size:.95rem}
++.month-origin-equation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:10px;background:var(--sunk)}
++.month-origin-equation b{white-space:nowrap}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-8-upcoming-home';
++const VERSION = 'bivvo-v11-41-9-month-value-origin';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- /dev/null
++++ b/bivvo_1139/js/views/home-month-detail.js
+@@ -0,0 +1,48 @@
++/* Origem dos indicadores mensais da Inicial, com os critérios do resumo financeiro. */
++import { h, money, today, ymOf, monthLabel, shortDate, num, round2 } from '../util.js';
++import * as F from '../finance.js';
++import { openSheet } from '../ui.js';
++
++export function openHomeMonthDetail(kind, ym, s) {
++  const sm=F.monthSummary(ym,s), all=F.monthTx(ym,s);
++  const occurred=ym===ymOf(today())?all.filter(t=>t.date<=today()):all;
++  const title={income:'Entrou',spend:'Gastei',saved:'Guardei'}[kind];
++  const list=(items,negative=false)=>h('ul.category-purchase-list',items.map(t=>h('li',
++    h('div',h('b',t.desc||t.name||t.cat||'Lançamento'),
++      h('small',[t.date?shortDate(t.date):null,t.cat,t.method,t.status].filter(Boolean).join(' · '))),
++    h('strong',(negative?'− ':'')+money(t.value)))));
++  const section=(label,items,negative=false)=>h('section.month-origin-section',h('h3',label),
++    items.length?list(items,negative):h('p.muted.sm','Nenhum lançamento neste grupo.'));
++  const equation=(label,value)=>h('div.month-origin-equation',h('span',label),h('b',money(value)));
++  const sum=items=>round2(items.reduce((total,t)=>total+num(t.value),0));
++  const content=h('div.month-origin');
++  let value;
++  if(kind==='income'){
++    value=sm.incomePaid;
++    const paid=all.filter(t=>F.isRealIncome(t)&&F.isPaid(t));
++    const pending=all.filter(t=>F.isRealIncome(t)&&!F.isPaid(t));
++    content.append(h('p.notice','Soma das entradas marcadas como pagas e com data neste mês. Saldo inicial, resgates e devolução do principal de empréstimos ficam fora.'),
++      section('Entradas recebidas',paid),equation('Total que entrou',value));
++    if(pending.length)content.append(section('A receber · fora do total acima',pending),equation('Ainda a receber',sum(pending)));
++  }else if(kind==='spend'){
++    value=sm.spend;
++    const expenses=occurred.filter(F.isSpend).sort((a,b)=>b.date.localeCompare(a.date));
++    content.append(h('p.notice','Soma das despesas de consumo, incluindo compras no cartão e despesas pendentes. Valores guardados, saldo inicial e principal emprestado ficam fora.'+(ym===ymOf(today())?' No mês atual, entram apenas datas até hoje.':'')),
++      section('Despesas que compõem o total',expenses),equation('Total gasto',value));
++    const planned=ym===ymOf(today())?all.filter(t=>F.isSpend(t)&&t.date>today()):[];
++    if(planned.length)content.append(section('Agendados · fora do total acima',planned),equation('Total agendado',sm.planned));
++  }else{
++    value=sm.saved;
++    const deposits=occurred.filter(F.isSave),withdrawals=occurred.filter(F.isWithdraw);
++    const legacy=s.investments.filter(x=>!x.txId&&String(x.purchaseDate||'').startsWith(ym))
++      .map(x=>({name:x.name||'Investimento',date:x.purchaseDate,cat:'Investimento sem lançamento vinculado',value:num(x.costBasis??x.value)}));
++    const raw=round2(sum(deposits)-sum(withdrawals)+sum(legacy));
++    content.append(h('p.notice','Valores destinados a metas, reserva e investimentos, menos os resgates do período. Investimentos antigos sem lançamento vinculado também entram, pelo custo registrado no mês da compra.'),
++      section('Valores guardados',deposits),equation('Aportes e valores guardados',sum(deposits)));
++    if(withdrawals.length)content.append(section('Resgates descontados',withdrawals,true),equation('Menos resgates',-sum(withdrawals)));
++    if(legacy.length)content.append(section('Investimentos sem lançamento vinculado',legacy),equation('Mais investimentos antigos',sum(legacy)));
++    if(raw<0)content.append(equation('Resultado antes do ajuste',raw),h('p.hint','Os resgates superaram os aportes. O indicador Guardei mostra zero quando o resultado é negativo.'));
++    content.append(equation('Total guardado no mês',value));
++  }
++  openSheet({title:title+' · '+monthLabel(ym),subtitle:'De onde vem este valor: '+money(value),wide:true,content});
++}

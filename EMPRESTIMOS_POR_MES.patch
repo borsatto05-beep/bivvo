@@ -1,0 +1,45 @@
+--- a/bivvo_1139/js/views/loans.js
++++ b/bivvo_1139/js/views/loans.js
+@@ -112,10 +112,9 @@
+ 
+ export function renderLoans(root){
+   const s=S(), loans=s.loans||[], selectedYM=ctx.month||ymOf(today());
+-  const loanCreatedYM=l=>{if(!l.createdAt)return '';const d=new Date(l.createdAt);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
+-  const hasActivityInMonth=l=>loanCreatedYM(l)===selectedYM||String(l.due||'').startsWith(selectedYM)||paidFor(s,l.id).some(p=>String(p.date||'').startsWith(selectedYM));
+-  const monthLoans=loans.filter(hasActivityInMonth);
+-  const active=loans.filter(l=>!isPaid(l)), principal=active.reduce((a,l)=>a+Number(l.principal||0),0), ints=active.reduce((a,l)=>a+interestDue(l),0);
++  // A criação e o recebimento não alteram o mês do vencimento pendente.
++  const monthLoans=loans.filter(l=>ymOf(l.due||'')===selectedYM);
++  const active=monthLoans.filter(l=>!isPaid(l)), principal=active.reduce((a,l)=>a+Number(l.principal||0),0), ints=active.reduce((a,l)=>a+interestDue(l),0);
+   const monthPayments=(s.loanPayments||[]).filter(p=>String(p.date||'').startsWith(selectedYM));
+   const received=monthPayments.reduce((a,p)=>a+Number(p.interest||0),0), overdue=active.filter(l=>overdueDays(l)).reduce((a,l)=>a+totalDue(l),0), total=principal+ints;
+   const shift=n=>{ctx.month=addMonthsYM(selectedYM,n);rerender();};
+@@ -125,7 +124,7 @@
+     h('button.icon-btn',{type:'button','aria-label':'Próximo mês',onclick:()=>shift(1)},'›'));
+   const filter=h('select.input.loan-filter',h('option',{value:'active'},'Em aberto'),h('option',{value:'overdue'},'Vencidos'),h('option',{value:'paid'},'Quitados'),h('option',{value:'all'},'Todos'));
+   const listHost=h('div.loan-list');
+-  const draw=()=>{let list=monthLoans;if(filter.value==='active')list=monthLoans.filter(l=>!isPaid(l));if(filter.value==='overdue')list=monthLoans.filter(l=>overdueDays(l));if(filter.value==='paid')list=monthLoans.filter(isPaid);listHost.replaceChildren(...(list.length?list.map(l=>loanCard(s,l)): [h('div.empty',h('b',`Nenhum empréstimo com atividade em ${monthLabel(selectedYM).toLowerCase()}.`),h('p','O filtro considera criação, vencimento ou pagamento no mês selecionado.'))]));};
++  const draw=()=>{let list=monthLoans;if(filter.value==='active')list=monthLoans.filter(l=>!isPaid(l));if(filter.value==='overdue')list=monthLoans.filter(l=>overdueDays(l));if(filter.value==='paid')list=monthLoans.filter(isPaid);listHost.replaceChildren(...(list.length?list.map(l=>loanCard(s,l)): [h('div.empty',h('b',`Nenhum empréstimo neste filtro em ${monthLabel(selectedYM).toLowerCase()}.`),h('p','A lista considera apenas vencimentos do mês selecionado.'))]));};
+   filter.addEventListener('change',draw);
+   root.append(h('div.page-head',h('div',h('span.eyebrow','A receber'),h('h2','Empréstimos'),h('p',active.length?`${money(total)} a receber · ${overdue?`${money(overdue)} vencidos`:'nenhum valor vencido'}`:'Acompanhe principal, juros, pagamentos e atrasos.')),h('button.btn.primary',{type:'button',onclick:newLoan},'Novo empréstimo')),
+     h('div.page-head',monthSwitch,h('span.muted.sm',`Filtro: ${monthLabel(selectedYM)}`)),
+@@ -134,7 +133,7 @@
+     const people=[...new Set(active.map(l=>l.person))].map(person=>({label:person,value:active.filter(l=>l.person===person).reduce((a,l)=>a+totalDue(l),0),person})).sort((a,b)=>b.value-a.value);
+     const months={};(s.loanPayments||[]).forEach(p=>{const ym=ymOf(p.date);months[ym]=(months[ym]||0)+Number(p.interest||0);});const interestMonths=Object.entries(months).sort(([a],[b])=>a.localeCompare(b)).slice(-6).map(([ym,value])=>({label:monthShort(ym).toUpperCase(),value}));
+     root.append(h('div.loans-grid',h('section.card',h('div.section-head',h('div',h('h3','Carteira de empréstimos'),h('p','Toque em uma pessoa para ver os contratos.'))),donut(people,{center:'A receber',onPick:x=>personDetail(x.person)})),h('section.card',h('div.section-head',h('div',h('h3','Por pessoa'),h('p','Principal + juros pendentes.'))),bars(people,{onPick:x=>personDetail(x.person)}))),interestMonths.length?h('section.card.loan-interest-chart',h('div.section-head',h('div',h('h3','Juros recebidos'),h('p','Últimos meses com recebimento.'))),bars(interestMonths)):null);
+-    root.append(h('div.loan-list-head',h('div',h('h3','Contratos do mês'),h('p.muted.sm','Criação, vencimento ou pagamento no período selecionado.')),filter),listHost);draw();
++    root.append(h('div.loan-list-head',h('div',h('h3','Contratos do mês'),h('p.muted.sm','Vencimentos no mês selecionado. Em aberto mostra apenas pagamentos pendentes.')),filter),listHost);draw();
+   } else root.append(h('div.empty',h('b','Nenhum empréstimo cadastrado.'),h('p','Cadastre um empréstimo e acompanhe principal, juros, pagamentos e vencimentos.')));
+ }
+ export function openLoanForm(){newLoan();}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-1-global-add';
++const VERSION = 'bivvo-v11-41-2-loan-month';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));

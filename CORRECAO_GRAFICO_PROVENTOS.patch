@@ -1,0 +1,119 @@
+--- a/bivvo_1139/js/demo.js
++++ b/bivvo_1139/js/demo.js
+@@ -9,7 +9,7 @@
+   const t0 = today(), cur = ymOf(t0), day0 = Number(t0.slice(8));
+   /* Salário sempre já caiu neste mês (dia 1 a 5), para a demonstração nunca abrir com "Entrou R$ 0". */
+   const payDay = Math.max(1, Math.min(5, day0 - 3));
+-  const s = emptyState({ name: 'Ana', goal: 'economizar', incomeDay: payDay, onboarded: true, checkins: [], seenAchievements: [], invitesSent: 0, activationValueSeen: true, modules: { loans: true } });
++  const s = emptyState({ name: 'Ana', goal: 'economizar', incomeDay: payDay, onboarded: true, checkins: [], seenAchievements: [], invitesSent: 0, activationValueSeen: true, demoProventosReady: true, modules: { loans: true } });
+   s.savingPlan = { percent: 12 };
+   s.emergencyPlan = { target: 15000 };
+   s.cards = [
+--- a/bivvo_1139/index.html
++++ b/bivvo_1139/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.1" rel="stylesheet"/>
+-<script src="js/main.js?v=11.29.1" type="module"></script>
++<link href="app.css?v=11.41.13" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.13" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1343,3 +1343,6 @@
+ .demo-bar>span{flex:1 1 260px}
+ .demo-bar button{max-width:100%;white-space:normal}
+ @media(max-width:600px){.demo-bar{font-size:.76rem}.demo-bar>span{flex-basis:100%}.demo-bar button{flex:1;font-size:.72rem;padding:7px 9px}}
++
++.dividend-empty{padding:28px 18px;text-align:center;border:1px dashed var(--line);border-radius:14px;margin:18px 0;background:var(--sunk)}
++.dividend-empty p{font-size:.83rem;color:var(--ink-2);max-width:560px;margin:10px auto 16px}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-12-full-demo';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-13-dividend-detection';
++const SHELL = ['./', './index.html', './app.css?v=11.41.13', './js/main.js?v=11.41.13', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {
+--- a/bivvo_1139/js/views/investment-charts.js
++++ b/bivvo_1139/js/views/investment-charts.js
+@@ -9,7 +9,15 @@
+ const percent=n=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+ const sector=investmentSector;
+ const received=t=>F.isPaid(t)&&t.date<=today();
+-export const dividendRows=s=>s.transactions.filter(t=>F.isRealIncome(t)&&(t.cat==='Rendimentos'||t.transactionRole==='investment_dividend')&&!F.isWithdraw(t));
++const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
++export const dividendRows=s=>s.transactions.filter(t=>{
++ if(!F.isRealIncome(t)||F.isWithdraw(t))return false;
++ const category=normalized(t.cat),description=normalized(t.desc);
++ const explicit=t.transactionRole==='investment_dividend';
++ if(!explicit&&(['salario','freelance','reembolso','venda','vale/beneficio'].includes(category)||/\b(resgate|resgatado|venda de (ativo|acao|cota)|devolucao do principal)\b/.test(description)||t.transactionRole==='loan_interest_income'||category==='juros / emprestimo'))return false;
++ return explicit||/^(rendimentos?|proventos?|dividendos?|jcp|juros sobre (o )?capital proprio|cupons?|juros de investimentos)$/.test(category)||
++   /\b(dividendos?|proventos?|jcp|juros sobre (o )?capital proprio|rendimento(s)? (de|do|da|sobre)|cupom (de|do))\b/.test(description);
++});
+ export function dividendBuckets(rows,keys,annual=false){
+   return keys.map(key=>{const items=rows.filter(t=>(annual?t.date.slice(0,4):ymOf(t.date))===key);
+     return {key,items,paid:round2(items.filter(received).reduce((a,t)=>a+num(t.value),0)),pending:round2(items.filter(t=>!received(t)).reduce((a,t)=>a+num(t.value),0))};});
+@@ -60,10 +68,25 @@
+  }
+ }
+ export function investmentCharts(s,assets,showAsset){
++ if(store.isDemo()&&!s.profile.demoProventosReady){
++  const missing=dividendRows(s).length===0;
++  store.commit(st=>{
++   st.profile.demoProventosReady=true;
++   if(missing){
++    const sampleAssets=st.investments.filter(x=>['Ações','Fundos'].includes(x.type)).slice(0,3);
++    const chosen=sampleAssets.length?sampleAssets:[{id:undefined,name:'Carteira de exemplo'}];
++    for(let i=5;i>=0;i--)for(const [j,x] of chosen.entries()){
++     const ym=addMonthsYM(ymOf(today()),-i),day=i===0?Math.min(10,Number(today().slice(8))):10;
++     st.transactions.push({id:uid(),type:'income',cat:'Rendimentos',transactionRole:'investment_dividend',investmentId:x.id,value:round2(8+(5-i)*1.5+j*3),date:ym+'-'+String(day).padStart(2,'0'),status:'Pago',desc:'Proventos simulados · '+x.name,method:'Transferência',demoSeed:true,createdAt:Date.now()});
++    }
++   }
++  },{reason:'demo-dividend-compatibility',silent:true});
++ }
+  const host=h('div.invest-charts');
+  const all=dividendRows(s),controls=h('div.invest-chart-controls');
+  const mode=h('select.input.sm',{'aria-label':'Agrupamento dos proventos'},h('option',{value:'monthly'},'Mensal'),h('option',{value:'annual'},'Anual'));
+- const period=h('select.input.sm',{'aria-label':'Período dos proventos'},h('option',{value:'year'},'Ano atual'),h('option',{value:'12'},'Últimos 12 meses'),h('option',{value:'24'},'Últimos 24 meses'));
++ const dividendYears=[...new Set(all.map(t=>t.date.slice(0,4)))].filter(y=>/^\d{4}$/.test(y)&&y!==today().slice(0,4)).sort().reverse();
++ const period=h('select.input.sm',{'aria-label':'Período dos proventos'},h('option',{value:'year'},'Ano atual'),h('option',{value:'12'},'Últimos 12 meses'),h('option',{value:'24'},'Últimos 24 meses'),dividendYears.map(y=>h('option',{value:'y:'+y},'Ano '+y)));
+  const type=h('select.input.sm',{'aria-label':'Tipo de ativo dos proventos'},h('option',{value:''},'Todos os tipos'),[...new Set(s.investments.map(x=>x.type))].sort().map(x=>h('option',{value:x},x)));
+  const asset=h('select.input.sm',{'aria-label':'Filtrar ativo dos proventos'},h('option',{value:''},'Todos os ativos'),h('option',{value:'unlinked'},'Sem vínculo com ativo'),s.investments.map(x=>h('option',{value:x.id},x.name)));
+  const body=h('div.dividend-body');
+@@ -73,7 +96,8 @@
+  function draw(){
+   period.disabled=mode.value==='annual';
+   const annual=mode.value==='annual',cur=ymOf(today()),year=cur.slice(0,4);
+-  const keys=annual?Array.from({length:5},(_,i)=>String(Number(year)-4+i)):period.value==='year'?Array.from({length:12},(_,i)=>year+'-'+String(i+1).padStart(2,'0')):Array.from({length:Number(period.value)},(_,i)=>addMonthsYM(cur,i-Number(period.value)+1));
++  const selectedYear=period.value.startsWith('y:')?period.value.slice(2):year;
++  const keys=annual?Array.from({length:5},(_,i)=>String(Number(year)-4+i)):(period.value==='year'||period.value.startsWith('y:'))?Array.from({length:12},(_,i)=>selectedYear+'-'+String(i+1).padStart(2,'0')):Array.from({length:Number(period.value)},(_,i)=>addMonthsYM(cur,i-Number(period.value)+1));
+   const rows=all.filter(t=>(!type.value||investmentById.get(t.investmentId)?.type===type.value)&&(!asset.value||(asset.value==='unlinked'?!investmentById.has(t.investmentId):t.investmentId===asset.value)));
+   const buckets=dividendBuckets(rows,keys,annual),totalPaid=round2(buckets.reduce((a,x)=>a+x.paid,0)),totalPending=round2(buckets.reduce((a,x)=>a+x.pending,0));
+   const max=Math.max(1,...buckets.map(x=>x.paid+x.pending));
+@@ -94,10 +118,13 @@
+   });
+   body.replaceChildren(h('div.dividend-summary',h('span','Recebidos ',h('b',money(totalPaid))),h('span','A receber ',h('b',money(totalPending)))),
+    h('div.dividend-key',h('span',h('i.received'),'Proventos recebidos'),h('span',h('i.pending'),'Proventos a receber')),
+-   h('p.hint','Valores em R$. Deslize o gráfico para consultar todos os períodos.'),h('div.dividend-chart-scroll',svgChart),
+-   totalPaid+totalPending===0?h('p.muted.sm','Nenhum provento registrado para os filtros selecionados.'):h('span',{'aria-hidden':'true'}),
++   h('p.hint','Valores em R$. Deslize o gráfico para consultar todos os períodos.'),...(totalPaid+totalPending>0?[h('div.dividend-chart-scroll',svgChart)]:[]),
++   totalPaid+totalPending===0?h('div.dividend-empty',
++     h('b',rows.length?'Há proventos fora deste período':'Nenhum provento encontrado nestes filtros'),
++     h('p',rows.length?'Escolha o ano em que os recebimentos foram registrados.':'Registre os dividendos, JCP ou rendimentos recebidos ou previstos para preencher o gráfico. O valor aplicado e a valorização da carteira não representam proventos.'),
++     rows.length?h('button.btn',{type:'button',onclick:()=>{const latest=rows.map(t=>t.date.slice(0,4)).sort().at(-1);mode.value='monthly';period.value=latest===year?'year':'y:'+latest;draw();}},'Ver ano com proventos'):h('button.btn',{type:'button',onclick:()=>openDividend(s)},'Adicionar primeiro provento')):h('span',{'aria-hidden':'true'}),
+    h('p.hint',annual?'Últimos 5 anos. Toque nas barras para conferir os lançamentos.':'Toque nas barras para conferir os lançamentos.'),
+-   h('p.hint','Fonte: entradas em Rendimentos e proventos identificados. Resgates e valorização dos ativos não são proventos. Entradas sem vínculo aparecem em Todos os ativos e Sem vínculo com ativo.'));
++   h('p.hint','Fonte: entradas identificadas como rendimentos, dividendos, proventos, JCP e cupons. Resgates e valorização dos ativos não são proventos. Entradas sem vínculo aparecem em Todos os ativos e Sem vínculo com ativo.'));
+  }
+  [mode,period,type,asset].forEach(x=>x.addEventListener('change',draw));draw();
+  host.append(chartCard);

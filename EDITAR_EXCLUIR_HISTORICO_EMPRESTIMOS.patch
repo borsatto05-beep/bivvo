@@ -1,0 +1,199 @@
+--- a/js/loan-history.js
++++ b/js/loan-history.js
+@@ -0,0 +1,61 @@
++/* Rebuild a loan from its origin, payments and explicit renewals. No cash entry is left behind. */
++import {round2,addMonthsDate,uid} from './util.js';
++const base=l=>round2(l.interestMode==='fixed'?Number(l.interestFixed||0):l.principal*Number(l.interestRate||0)/100);
++export function loanHistory(s,id){
++ const loan=s.loans.find(x=>x.id===id);if(!loan)throw Error('Contrato não encontrado.');
++ const cycles=s.loanCycles.filter(x=>x.loanId===id),payments=s.loanPayments.filter(x=>x.loanId===id);
++ // Old automatic cycles did not carry the payment ID. Pair them in recorded order.
++ const automatic=cycles.filter(x=>x.automatic),renewed=payments.filter(x=>x.autoRenewed);
++ automatic.forEach((x,i)=>{if(!x.paymentId&&renewed[i])x.paymentId=renewed[i].id;});
++ const events=[...payments.map(x=>({kind:'payment',item:x})),...cycles.filter(x=>x.type==='renewal'&&!x.automatic).map(x=>({kind:'renewal',item:x}))];
++ events.sort((a,b)=>String(a.item.date).localeCompare(String(b.item.date))||Number(a.item.createdAt||(a.kind==='renewal'?8640000000000000:0))-Number(b.item.createdAt||(b.kind==='renewal'?8640000000000000:0)));
++ const origin=cycles.find(x=>x.type==='created');
++ const initial=loan.historyOrigin||{principal:Number(origin?.principal??loan.principalOriginal),interestDue:Number(origin?.interest??base({...loan,principal:Number(loan.principalOriginal)})),due:origin?.due||loan.due,interestMode:loan.interestMode,interestRate:loan.interestRate,interestFixed:loan.interestFixed,periodicity:loan.periodicity,status:'open'};
++ if(!loan.historyOrigin){
++  if(origin&&initial.interestMode==='percent'&&initial.principal)initial.interestRate=round2(initial.interestDue/initial.principal*100);
++  if(origin&&initial.interestMode==='fixed')initial.interestFixed=initial.interestDue;
++  loan.historyOrigin={...initial};
++ }
++ return {loan,events,initial:{...initial},automatic};
++}
++export function rebuildLoan(s,id){
++ const {loan,events,initial,automatic}=loanHistory(s,id),state={...initial};
++ const oldTx=s.transactions.filter(t=>t.loanId===id&&['loan_principal_return','loan_interest_income'].includes(t.transactionRole));
++ s.transactions=s.transactions.filter(t=>!oldTx.includes(t));
++ s.loanCycles=s.loanCycles.filter(c=>c.loanId!==id||!c.automatic);
++ for(const {kind,item} of events)if(kind==='renewal'&&item.rate===undefined)item.rate=state.interestMode==='fixed'?item.interest:(item.principal?item.interest/item.principal*100:state.interestRate);
++ for(const {kind,item} of events){
++  item.before={...state};
++  if(kind==='renewal'){
++   const capital=item.capitalize??Number(item.capitalized||0)>0;
++   if(capital){item.capitalized=state.interestDue;state.principal=round2(state.principal+state.interestDue);state.interestDue=0;}else item.capitalized=0;
++   if(item.rate===undefined)item.rate=state.interestMode==='fixed'?item.interest:(item.principal?item.interest/item.principal*100:state.interestRate);
++   if(state.interestMode==='fixed')state.interestFixed=item.rate;else state.interestRate=item.rate;
++   state.due=item.due;state.status='open';item.principal=state.principal;item.interest=base(state);state.interestDue=round2(state.interestDue+item.interest);
++  }else{
++   const total=round2(state.principal+state.interestDue);
++   if(item.amount>total+.004)throw Error('Um pagamento posterior ultrapassa o saldo recalculado. Corrija esse pagamento primeiro.');
++   item.interest=Math.min(item.amount,state.interestDue);item.principal=round2(item.amount-item.interest);
++   state.principal=round2(state.principal-item.principal);state.interestDue=round2(state.interestDue-item.interest);
++   item.autoRenewed=state.periodicity==='monthly'&&state.principal>.004&&state.interestDue<=.004&&!item.autoRenewDisabled;
++   state.status=state.principal+state.interestDue<=.004?'paid':'open';
++   if(item.autoRenewed){state.due=addMonthsDate(state.due,1);state.interestDue=base(state);const old=automatic.find(c=>c.paymentId===item.id);s.loanCycles.push({id:old?.id||uid(),loanId:id,paymentId:item.id,date:item.date,due:state.due,principal:state.principal,interest:state.interestDue,capitalized:0,type:'renewal',automatic:true,createdAt:item.createdAt});}
++   for(const [part,role,label] of [['principal','loan_principal_return','Principal recebido'],['interest','loan_interest_income','Juros recebidos']])if(item[part]>0){const old=oldTx.find(t=>t.loanPaymentId===item.id&&t.transactionRole===role);s.transactions.push({...old,id:old?.id||uid(),loanId:id,loanPaymentId:item.id,transactionRole:role,type:'income',value:item[part],cat:'Juros / Empréstimo',date:item.date,desc:label+' · '+loan.person,method:old?.method||'Transferência',status:'Pago'});}
++  }
++ }
++ Object.assign(loan,state);return loan;
++}
++export function changeLoanEvent(s,loanId,kind,eventId,changes=null){
++ const copy=structuredClone(s);const {loan}=loanHistory(copy,loanId);
++ if(kind==='origin'){
++  if(!changes)throw Error('Para remover a origem, exclua o contrato completo.');
++  loan.historyOrigin={...loan.historyOrigin,...changes};loan.principalOriginal=loan.historyOrigin.principal;
++  for(const tx of copy.transactions.filter(t=>t.loanId===loanId&&t.transactionRole==='loan_principal_out'))tx.value=loan.principalOriginal;
++  const origin=copy.loanCycles.find(c=>c.loanId===loanId&&c.type==='created');if(origin)Object.assign(origin,{principal:loan.historyOrigin.principal,interest:loan.historyOrigin.interestDue,due:loan.historyOrigin.due});
++ }else{
++  const arr=kind==='payment'?copy.loanPayments:copy.loanCycles,event=arr.find(x=>x.id===eventId&&x.loanId===loanId);if(!event)throw Error('Item não encontrado.');
++  if(event.automatic){const payment=copy.loanPayments.find(p=>p.id===event.paymentId);if(!payment)throw Error('Pagamento da renovação não encontrado.');if(changes)throw Error('Edite o pagamento que gerou esta renovação.');payment.autoRenewDisabled=true;}
++  if(changes)Object.assign(event,changes);else if(kind==='payment')copy.loanPayments=arr.filter(x=>x!==event);else copy.loanCycles=arr.filter(x=>x!==event);
++ }
++ rebuildLoan(copy,loanId);return copy;
++}
+--- a/js/views/loans.js
++++ b/js/views/loans.js
+@@ -1,7 +1,8 @@
++import { changeLoanEvent, loanHistory } from '../loan-history.js';
+ import { shareLoan } from './loan-share.js';
+ import { h, money, today, uid, round2, parseMoney, addMonthsDate, addMonthsYM, diffDays, ymOf, monthShort, monthLabel, shortDate } from '../util.js';
+ import * as store from '../store.js';
+-import { openSheet, field, toast, confirmSheet } from '../ui.js';
++import { openSheet, field, toast, confirmSheet, closeAllSheets } from '../ui.js';
+ import { donut, bars, progressBar } from '../charts.js';
+ import { ctx, rerender } from '../nav.js';
+ 
+@@ -22,7 +23,7 @@
+   const person=h('input.input',{placeholder:'Nome da pessoa',maxlength:60}), principal=h('input.input',{inputmode:'decimal',placeholder:'0,00'}), mode=h('select.input',h('option',{value:'percent'},'Percentual (%)'),h('option',{value:'fixed'},'Valor fixo (R$)')), interest=h('input.input',{inputmode:'decimal',placeholder:'10'}), periodicity=h('select.input',h('option',{value:'monthly'},'Mensal'),h('option',{value:'single'},'Único')), due=h('input.input',{type:'date',value:today()}), note=h('textarea.input',{rows:2,placeholder:'Observação (opcional)',maxlength:180}), preview=h('div.loan-preview'), msg=h('p.form-msg');
+   const update=()=>{const p=parseMoney(principal.value),v=parseMoney(interest.value),i=mode.value==='fixed'?v:round2(p*v/100);preview.replaceChildren(h('small','PRÉVIA'),h('div.loan-preview-grid',h('span','Principal',h('b',money(p))),h('span','Juros',h('b',money(i))),h('span','Total a receber',h('b',money(p+i)))));};
+   [principal,interest,mode].forEach(x=>x.addEventListener('input',update)); update();
+-  const sh=openSheet({title:'Novo empréstimo',subtitle:'Principal e juros ficam separados para não inflar sua renda.',content:h('div.form',field('Pessoa',person),field('Valor principal',principal),field('Tipo de juros',mode),field('Juros',interest),field('Periodicidade',periodicity),field('Vencimento',due),field('Observação',note),preview,msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const p=parseMoney(principal.value),v=parseMoney(interest.value);if(!person.value.trim()||p<=0||v<0||!due.value){msg.textContent='Informe pessoa, valor e vencimento.';return;}const savedId=uid();store.commit(s=>{const id=savedId, l={id,person:person.value.trim(),principalOriginal:p,principal:p,interestMode:mode.value,interestRate:mode.value==='percent'?v:0,interestFixed:mode.value==='fixed'?v:0,periodicity:periodicity.value,due:due.value,status:'open',note:note.value.trim(),createdAt:Date.now()};l.interestDue=baseInterest(l);s.loans.push(l);s.loanCycles.push({id:uid(),loanId:id,date:today(),due:l.due,principal:p,interest:l.interestDue,type:'created'});});sh.close();toast('Empréstimo registrado.');shareSaved(savedId,{title:'Empréstimo registrado'});}},'Salvar')]});
++  const sh=openSheet({title:'Novo empréstimo',subtitle:'Principal e juros ficam separados para não inflar sua renda.',content:h('div.form',field('Pessoa',person),field('Valor principal',principal),field('Tipo de juros',mode),field('Juros',interest),field('Periodicidade',periodicity),field('Vencimento',due),field('Observação',note),preview,msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const p=parseMoney(principal.value),v=parseMoney(interest.value);if(!person.value.trim()||p<=0||v<0||!due.value){msg.textContent='Informe pessoa, valor e vencimento.';return;}const savedId=uid();store.commit(s=>{const id=savedId, l={id,person:person.value.trim(),principalOriginal:p,principal:p,interestMode:mode.value,interestRate:mode.value==='percent'?v:0,interestFixed:mode.value==='fixed'?v:0,periodicity:periodicity.value,due:due.value,status:'open',note:note.value.trim(),createdAt:Date.now()};l.interestDue=baseInterest(l);s.loans.push(l);s.loanCycles.push({id:uid(),loanId:id,date:today(),due:l.due,principal:p,interest:l.interestDue,type:'created',createdAt:Date.now()});});sh.close();toast('Empréstimo registrado.');shareSaved(savedId,{title:'Empréstimo registrado'});}},'Salvar')]});
+ }
+ 
+ 
+@@ -55,21 +56,56 @@
+ function payLoan(l){
+   const amount=h('input.input',{inputmode:'decimal',placeholder:'0,00'}), preview=h('div.loan-preview'), msg=h('p.form-msg');
+   const update=()=>{const a=Math.max(0,parseMoney(amount.value)), i=Math.min(a,interestDue(l)), p=Math.min(Number(l.principal||0),Math.max(0,a-i)), rest=round2(totalDue(l)-i-p);preview.replaceChildren(h('small','COMO O BIVVO VAI DISTRIBUIR'),h('div.loan-preview-grid',h('span','Juros',h('b',money(i))),h('span','Principal',h('b',money(p))),h('span','Restará',h('b',money(rest)))));};amount.addEventListener('input',update);update();
+-  const sh=openSheet({title:`Receber de ${l.person}`,subtitle:`Saldo a receber ${money(totalDue(l))}`,content:h('div.form',h('p.notice',`Principal ${money(l.principal)} · juros pendentes ${money(interestDue(l))}. O pagamento quita juros primeiro e depois amortiza o principal. Se os juros do ciclo forem quitados e ainda restar principal em um contrato mensal, o Bivvo renova automaticamente para o próximo mês e calcula novos juros sobre o principal restante.`),field('Valor recebido',amount),preview,msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const requested=parseMoney(amount.value), max=totalDue(l);if(requested<=0){msg.textContent='Informe o valor recebido.';return;}if(requested>max+0.004){msg.textContent=`O máximo a receber neste contrato é ${money(max)}.`;return;}store.commit(s=>{const loan=s.loans.find(x=>x.id===l.id), a=Math.min(requested,totalDue(loan)), i=Math.min(a,interestDue(loan)), p=Math.min(loan.principal,Math.max(0,a-i));loan.interestDue=round2(interestDue(loan)-i);loan.principal=round2(loan.principal-p);const currentInterestCleared=loan.interestDue<=0.004;const shouldAutoRenew=loan.periodicity==='monthly'&&loan.principal>0.004&&currentInterestCleared;if(loan.principal<=0.004&&currentInterestCleared){loan.status='paid';loan.interestDue=0;}else if(shouldAutoRenew){const previousDue=loan.due||today();loan.due=addMonthsDate(previousDue,1);loan.status='open';const newInterest=baseInterest(loan);loan.interestDue=round2(newInterest);s.loanCycles.push({id:uid(),loanId:loan.id,date:today(),due:loan.due,principal:loan.principal,interest:newInterest,capitalized:0,type:'renewal',automatic:true});}else loan.status='open';const pid=uid();s.loanPayments.push({id:pid,loanId:loan.id,date:today(),amount:round2(i+p),interest:i,principal:p,autoRenewed:shouldAutoRenew,createdAt:Date.now()});if(p>0)s.transactions.push({id:uid(),loanId:loan.id,loanPaymentId:pid,transactionRole:'loan_principal_return',type:'income',value:p,cat:'Juros / Empréstimo',date:today(),desc:`Principal recebido · ${loan.person}`,method:'Transferência',status:'Pago'});if(i>0)s.transactions.push({id:uid(),loanId:loan.id,loanPaymentId:pid,transactionRole:'loan_interest_income',type:'income',value:i,cat:'Juros / Empréstimo',date:today(),desc:`Juros recebidos · ${loan.person}`,method:'Transferência',status:'Pago'});});sh.close();toast('Pagamento registrado.');shareSaved(l.id,{title:'Comprovante de pagamento',payment:paidFor(S(),l.id).at(-1)});}},'Registrar pagamento')]});
++  const sh=openSheet({title:`Receber de ${l.person}`,subtitle:`Saldo a receber ${money(totalDue(l))}`,content:h('div.form',h('p.notice',`Principal ${money(l.principal)} · juros pendentes ${money(interestDue(l))}. O pagamento quita juros primeiro e depois amortiza o principal. Se os juros do ciclo forem quitados e ainda restar principal em um contrato mensal, o Bivvo renova automaticamente para o próximo mês e calcula novos juros sobre o principal restante.`),field('Valor recebido',amount),preview,msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const requested=parseMoney(amount.value), max=totalDue(l);if(requested<=0){msg.textContent='Informe o valor recebido.';return;}if(requested>max+0.004){msg.textContent=`O máximo a receber neste contrato é ${money(max)}.`;return;}store.commit(s=>{const loan=s.loans.find(x=>x.id===l.id);loanHistory(s,l.id);const a=Math.min(requested,totalDue(loan)), i=Math.min(a,interestDue(loan)), p=Math.min(loan.principal,Math.max(0,a-i));loan.interestDue=round2(interestDue(loan)-i);loan.principal=round2(loan.principal-p);const currentInterestCleared=loan.interestDue<=0.004;const shouldAutoRenew=loan.periodicity==='monthly'&&loan.principal>0.004&&currentInterestCleared;if(loan.principal<=0.004&&currentInterestCleared){loan.status='paid';loan.interestDue=0;}else if(shouldAutoRenew){const previousDue=loan.due||today();loan.due=addMonthsDate(previousDue,1);loan.status='open';const newInterest=baseInterest(loan);loan.interestDue=round2(newInterest);s.loanCycles.push({id:uid(),loanId:loan.id,date:today(),due:loan.due,principal:loan.principal,interest:newInterest,capitalized:0,type:'renewal',automatic:true,createdAt:Date.now()});}else loan.status='open';const pid=uid();s.loanPayments.push({id:pid,loanId:loan.id,date:today(),amount:round2(i+p),interest:i,principal:p,autoRenewed:shouldAutoRenew,createdAt:Date.now()});if(p>0)s.transactions.push({id:uid(),loanId:loan.id,loanPaymentId:pid,transactionRole:'loan_principal_return',type:'income',value:p,cat:'Juros / Empréstimo',date:today(),desc:`Principal recebido · ${loan.person}`,method:'Transferência',status:'Pago'});if(i>0)s.transactions.push({id:uid(),loanId:loan.id,loanPaymentId:pid,transactionRole:'loan_interest_income',type:'income',value:i,cat:'Juros / Empréstimo',date:today(),desc:`Juros recebidos · ${loan.person}`,method:'Transferência',status:'Pago'});});sh.close();toast('Pagamento registrado.');shareSaved(l.id,{title:'Comprovante de pagamento',payment:paidFor(S(),l.id).at(-1)});}},'Registrar pagamento')]});
+ }
+ 
+ function renewLoan(l){
+   const capitalize=h('input',{type:'checkbox'}), rate=h('input.input',{inputmode:'decimal',value:String(l.interestMode==='fixed'?(l.interestFixed||0):(l.interestRate||0)).replace('.',',')}), due=h('input.input',{type:'date',value:addMonthsDate(l.due||today(),1)}), msg=h('p.form-msg');
+-  const sh=openSheet({title:`Renovar · ${l.person}`,subtitle:'Nada é capitalizado automaticamente.',content:h('div.form',h('label.check',capitalize,h('span','Capitalizar juros pendentes no principal')),field(l.interestMode==='fixed'?'Juros do novo ciclo (R$)':'Taxa do novo ciclo (%)',rate),field('Novo vencimento',due),h('p.notice','Se capitalizar, os juros pendentes viram principal. Se não capitalizar, continuam separados do principal.'),msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const v=parseMoney(rate.value);if(v<0||!due.value){msg.textContent='Revise taxa e vencimento.';return;}store.commit(s=>{const loan=s.loans.find(x=>x.id===l.id), oldInterest=interestDue(loan);if(capitalize.checked&&oldInterest>0){loan.principal=round2(loan.principal+oldInterest);loan.interestDue=0;}if(loan.interestMode==='fixed')loan.interestFixed=v;else loan.interestRate=v;loan.due=due.value;loan.status='open';loan.interestDue=round2(interestDue(loan)+baseInterest(loan));s.loanCycles.push({id:uid(),loanId:loan.id,date:today(),due:loan.due,principal:loan.principal,interest:baseInterest(loan),capitalized:capitalize.checked?oldInterest:0,type:'renewal'});});sh.close();toast('Empréstimo renovado.');shareSaved(l.id,{title:'Empréstimo renovado',cycle:S().loanCycles.filter(x=>x.loanId===l.id).at(-1)});}},'Confirmar renovação')]});
++  const sh=openSheet({title:`Renovar · ${l.person}`,subtitle:'Nada é capitalizado automaticamente.',content:h('div.form',h('label.check',capitalize,h('span','Capitalizar juros pendentes no principal')),field(l.interestMode==='fixed'?'Juros do novo ciclo (R$)':'Taxa do novo ciclo (%)',rate),field('Novo vencimento',due),h('p.notice','Se capitalizar, os juros pendentes viram principal. Se não capitalizar, continuam separados do principal.'),msg),footer:[h('button.btn.primary',{type:'button',onclick:()=>{const v=parseMoney(rate.value);if(v<0||!due.value){msg.textContent='Revise taxa e vencimento.';return;}store.commit(s=>{const loan=s.loans.find(x=>x.id===l.id);loanHistory(s,l.id);const oldInterest=interestDue(loan);if(capitalize.checked&&oldInterest>0){loan.principal=round2(loan.principal+oldInterest);loan.interestDue=0;}if(loan.interestMode==='fixed')loan.interestFixed=v;else loan.interestRate=v;loan.due=due.value;loan.status='open';loan.interestDue=round2(interestDue(loan)+baseInterest(loan));s.loanCycles.push({id:uid(),loanId:loan.id,date:today(),due:loan.due,principal:loan.principal,interest:baseInterest(loan),capitalized:capitalize.checked?oldInterest:0,capitalize:capitalize.checked,rate:v,type:'renewal',createdAt:Date.now()});});sh.close();toast('Empréstimo renovado.');shareSaved(l.id,{title:'Empréstimo renovado',cycle:S().loanCycles.filter(x=>x.loanId===l.id).at(-1)});}},'Confirmar renovação')]});
++}
++
++function historyTarget(e){return {kind:e.origin?'origin':e.payment?'payment':'renewal',id:(e.payment||e.cycle)?.id};}
++function saveHistory(l,e,changes,msg){
++ try{
++  const target=historyTarget(e),old=S(),next=changeLoanEvent(old,l.id,target.kind,target.id,changes);
++  const removed=[...old.loanPayments,...old.loanCycles,...old.transactions].filter(x=>![...next.loanPayments,...next.loanCycles,...next.transactions].some(y=>y.id===x.id));
++  store.markDeleted(removed.map(x=>x.id));
++  store.commit(st=>{for(const key of ['loans','loanPayments','loanCycles','transactions'])st[key]=next[key];});
++  closeAllSheets();setTimeout(()=>loanDetail(S().loans.find(x=>x.id===l.id)),300);toast(changes?'Histórico atualizado e contrato recalculado.':'Item excluído e contrato recalculado.');
++ }catch(error){if(msg)msg.textContent=error.message;else toast(error.message);}
++}
++async function deleteHistoryEvent(l,e){
++ if(e.origin){deleteLoan(l,{close:()=>closeAllSheets()});return;}
++ const ok=await confirmSheet({title:'Excluir este item do histórico?',message:e.cycle?.automatic?'Esta renovação será desfeita. O pagamento que a gerou será mantido. Saldo, juros e vencimento serão recalculados.':'O app vai desfazer este item e recalcular os eventos seguintes, o saldo, os juros e o vencimento. Os lançamentos ligados a ele também serão corrigidos.',confirmLabel:'Excluir item',danger:true});
++ if(ok)saveHistory(l,e,null);
++}
++function editHistoryEvent(l,e){
++ if(e.cycle?.automatic){const copy=structuredClone(S());loanHistory(copy,l.id);const cycle=copy.loanCycles.find(x=>x.id===e.cycle.id),payment=copy.loanPayments.find(x=>x.id===cycle?.paymentId);if(payment)return editHistoryEvent(l,{payment});toast('Pagamento da renovação não encontrado.');return;}
++ const msg=h('p.form-msg',{role:'alert'}),form=h('div.form'),date=h('input.input',{type:'date',value:e.payment?.date||e.cycle?.date||today()}),amount=h('input.input',{inputmode:'decimal'});
++ let due,rate,capitalize;
++ if(e.origin){
++  const copy=structuredClone(S()),{initial}=loanHistory(copy,l.id);
++  amount.value=String(initial.principal).replace('.',',');due=h('input.input',{type:'date',value:initial.due});rate=h('input.input',{inputmode:'decimal',value:String(initial.interestMode==='fixed'?initial.interestFixed:initial.interestRate).replace('.',',')});
++  form.append(field('Valor emprestado original',amount),field('Juros originais',rate),field('Vencimento original',due));
++ }else if(e.payment){amount.value=String(e.payment.amount).replace('.',',');form.append(field('Valor recebido',amount),field('Data do pagamento',date));}
++ else{due=h('input.input',{type:'date',value:e.cycle.due});rate=h('input.input',{inputmode:'decimal',value:String(e.cycle.rate??(l.interestMode==='fixed'?e.cycle.interest:e.cycle.interest/e.cycle.principal*100)).replace('.',',')});capitalize=h('input',{type:'checkbox',checked:e.cycle.capitalize??e.cycle.capitalized>0});form.append(field('Data da renovação',date),field('Novo vencimento',due),field(l.interestMode==='fixed'?'Juros do ciclo (R$)':'Taxa do ciclo (%)',rate),h('label.check',capitalize,h('span','Capitalizar juros pendentes')));}
++ form.append(h('p.hint','As alterações recalculam os eventos seguintes e os lançamentos do extrato.'),msg);
++ openSheet({title:e.origin?'Editar valor original':e.payment?'Editar pagamento':'Editar renovação',content:form,footer:[h('button.btn.primary',{type:'button',onclick:()=>{
++  let changes;
++  if(e.origin){const value=parseMoney(amount.value),r=parseMoney(rate.value);if(!(value>0)||r<0||!due.value){msg.textContent='Revise valor, juros e vencimento.';return;}changes={principal:value,interestDue:l.interestMode==='fixed'?r:round2(value*r/100),interestRate:l.interestMode==='fixed'?0:r,interestFixed:l.interestMode==='fixed'?r:0,due:due.value};}
++  else if(e.payment){const value=parseMoney(amount.value);if(!(value>0)||!date.value||date.value>today()){msg.textContent='Informe um valor positivo e uma data até hoje.';return;}changes={amount:value,date:date.value};}
++  else{const r=parseMoney(rate.value);if(r<0||!due.value||!date.value||date.value>today()){msg.textContent='Revise taxa, vencimento e data.';return;}changes={rate:r,due:due.value,date:date.value,capitalize:capitalize.checked};}
++  saveHistory(l,e,changes,msg);
++ }},'Salvar alterações')]});
+ }
+ 
+ function timeline(s,l){
+   const events=[];
+-  events.push({date:(l.createdAt?new Date(l.createdAt):null),iso:null,label:'Dinheiro emprestado',value:l.principalOriginal,kind:'out'});
++  events.push({date:(l.createdAt?new Date(l.createdAt):null),iso:null,label:'Dinheiro emprestado',value:l.principalOriginal,kind:'out',origin:true});
+   (s.loanCycles||[]).filter(c=>c.loanId===l.id).forEach(c=>{if(c.type==='renewal')events.push({date:null,iso:c.date,label:c.capitalized?`Renovado · ${money(c.capitalized)} capitalizados`:'Empréstimo renovado',value:c.interest,kind:'cycle',cycle:c});});
+   paidFor(s,l.id).forEach(p=>events.push({date:p.createdAt?new Date(p.createdAt):null,iso:p.date,label:`Pagamento · juros ${money(p.interest)} · principal ${money(p.principal)}`,value:p.amount,kind:'in',payment:p}));
+   events.sort((a,b)=>String(b.iso||b.date?.toISOString()||'').localeCompare(String(a.iso||a.date?.toISOString()||'')));
+-  return h('div.loan-timeline',events.map(e=>{const d=e.iso|| (e.date?`${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`:today());return h('div.loan-event',h('span.loan-dot',{class:e.kind}),h('div',h('b',e.label),h('small',shortDate(d))),h('strong',money(e.value)),h('button.btn.sm',{type:'button',onclick:()=>shareLoan(l,{title:e.payment?'Comprovante de pagamento':e.cycle?'Renovação do empréstimo':'Resumo do empréstimo',payment:e.payment,cycle:e.cycle})},'Compartilhar'));}));
++  return h('div.loan-timeline',events.map(e=>{const d=e.iso|| (e.date?`${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`:today());return h('div.loan-event',h('span.loan-dot',{class:e.kind}),h('div',h('b',e.label),h('small',shortDate(d))),h('strong',money(e.value)),h('div.loan-history-actions',h('button.btn.sm',{type:'button',onclick:()=>shareLoan(l,{title:e.payment?'Comprovante de pagamento':e.cycle?'Renovação do empréstimo':'Resumo do empréstimo',payment:e.payment,cycle:e.cycle})},'Compartilhar'),h('button.btn.sm',{type:'button',onclick:()=>editHistoryEvent(l,e)},'Editar'),h('button.btn.sm.danger-text',{type:'button',onclick:()=>deleteHistoryEvent(l,e)},'Excluir')));}));
+ }
+ 
+ function loanDetail(l){
+--- a/tests/loan-history.test.mjs
++++ b/tests/loan-history.test.mjs
+@@ -0,0 +1,16 @@
++import assert from 'node:assert/strict';
++import {changeLoanEvent,rebuildLoan} from '../js/loan-history.js';
++const initial=()=>({loans:[{id:'l',person:'Ana',principalOriginal:1000,principal:1000,interestDue:100,interestMode:'percent',interestRate:10,periodicity:'monthly',due:'2026-10-12',status:'open'}],loanCycles:[{id:'o',loanId:'l',type:'created',principal:1000,interest:100,due:'2026-10-12',date:'2026-10-01'}],loanPayments:[],transactions:[]});
++const pay=(s,id,amount,date='2026-10-12')=>{s.loanPayments.push({id,loanId:'l',amount,date,createdAt:s.loanPayments.length+1});rebuildLoan(s,'l');};
++let s=initial();pay(s,'p',100);assert.equal(s.loans[0].due,'2026-11-12');assert.equal(s.loanCycles.length,2);
++let undone=changeLoanEvent(s,'l','payment','p');assert.equal(undone.loans[0].due,'2026-10-12');assert.equal(undone.loans[0].principal,1000);assert.equal(undone.loans[0].interestDue,100);assert.equal(undone.transactions.length,0);assert.equal(undone.loanCycles.length,1);
++let edited=changeLoanEvent(s,'l','payment','p',{amount:50});assert.equal(edited.loans[0].interestDue,50);assert.equal(edited.loans[0].due,'2026-10-12');assert.equal(edited.transactions[0].value,50);
++const auto=s.loanCycles.find(x=>x.automatic);undone=changeLoanEvent(s,'l','renewal',auto.id);assert.equal(undone.loans[0].interestDue,0);assert.equal(undone.loans[0].due,'2026-10-12');assert.equal(undone.loanPayments.length,1);
++s=initial();pay(s,'p',1100);assert.equal(s.loans[0].status,'paid');undone=changeLoanEvent(s,'l','payment','p');assert.equal(undone.loans[0].status,'open');assert.equal(undone.loans[0].principal,1000);
++s=initial();s.loanCycles.push({id:'r',loanId:'l',type:'renewal',date:'2026-10-12',due:'2026-11-12',rate:20,interest:220,principal:1100,capitalized:100,capitalize:true,createdAt:1});rebuildLoan(s,'l');assert.equal(s.loans[0].principal,1100);assert.equal(s.loans[0].interestDue,220);undone=changeLoanEvent(s,'l','renewal','r');assert.equal(undone.loans[0].principal,1000);assert.equal(undone.loans[0].interestDue,100);assert.equal(undone.loans[0].interestRate,10);
++s=initial();pay(s,'a',50);pay(s,'b',150);edited=changeLoanEvent(s,'l','payment','a',{amount:20});assert.equal(edited.loanPayments.find(p=>p.id==='b').interest,80);assert.equal(edited.loanPayments.find(p=>p.id==='b').principal,70);assert.equal(edited.loans[0].principal,930);assert.equal(edited.loans[0].interestDue,93);assert.equal(edited.transactions.reduce((a,t)=>a+t.value,0),170);
++const frozen=JSON.stringify(s);assert.throws(()=>changeLoanEvent(s,'l','origin',null,{principal:10,interestDue:1}),/ultrapassa/);assert.equal(JSON.stringify(s),frozen);
++// Legacy data without timestamps or payment links; deleting an earlier payment retains later payments.
++s=initial();s.loanPayments=[{id:'a',loanId:'l',amount:100,interest:100,principal:0,date:'2026-10-12',autoRenewed:true},{id:'b',loanId:'l',amount:50,interest:50,principal:0,date:'2026-10-12'}];s.loanCycles.push({id:'old',loanId:'l',type:'renewal',automatic:true,date:'2026-10-12',due:'2026-11-12',interest:100,principal:1000});s.loans[0].due='2026-11-12';s.loans[0].interestDue=50;undone=changeLoanEvent(s,'l','payment','a');assert.equal(undone.loans[0].due,'2026-10-12');assert.equal(undone.loans[0].interestDue,50);assert.equal(undone.loanPayments.length,1);
++s=initial();s.loanCycles.push({id:'r',loanId:'l',type:'renewal',date:'2026-10-12',due:'2026-11-12',rate:10,interest:100,principal:1000,capitalized:0,createdAt:1});rebuildLoan(s,'l');edited=changeLoanEvent(s,'l','renewal','r',{rate:5,due:'2026-12-12',capitalize:false});assert.equal(edited.loans[0].interestDue,150);assert.equal(edited.loans[0].due,'2026-12-12');assert.equal(edited.loans[0].interestRate,5);
++console.log('PASS: undo payment and auto-renewal, edit partials, reopen paid, undo capitalization, replay subsequent payments, legacy history, atomic validation and cash synchronization');
+--- a/app.css
++++ b/app.css
+@@ -1391,3 +1391,5 @@
+ .loan-event>.btn{grid-column:2 / -1;justify-self:start;margin:4px 0 6px}.loan-row .btn-row{flex-wrap:wrap}
+ 
+ .loan-share-message{min-height:340px;line-height:1.75;padding:20px;border-radius:18px;background:#f0faf4;color:#183b2b;border:1px solid #cbe4d4;resize:vertical;font-family:inherit;font-size:.9rem;box-shadow:0 3px 12px #183b2b08}
++
++.loan-history-actions{grid-column:2 / -1;display:flex!important;flex-wrap:wrap;gap:7px;margin:6px 0 10px}.loan-history-actions .btn{font-size:.75rem;padding:8px 12px}
+--- a/index.html
++++ b/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.20" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.20" type="module"></script>
++<link href="app.css?v=11.41.21" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.21" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/sw.js
++++ b/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-20-loan-message';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.20', './js/main.js?v=11.41.20', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-21-edit-loan-history';
++const SHELL = ['./', './index.html', './app.css?v=11.41.21', './js/main.js?v=11.41.21', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {

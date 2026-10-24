@@ -1,0 +1,67 @@
+--- a/js/charts.js
++++ b/js/charts.js
+@@ -12,7 +12,7 @@
+ export function progressBar(value,max,label='Progresso'){ const pct=max?Math.min(100,Math.max(0,value/max*100)):0; return h('div.viz-progress',h('div',h('span',label),h('b',`${Math.round(pct)}%`)),h('span.viz-progress-track',h('i',{vars:{'--p':pct+'%'}}))); }
+ 
+ /* Infográfico de orçamento: fatias, chamadas externas e tabela acessível. */
+-export function pie(items, { label='Distribuição dos gastos por categoria', onPick, caption='Toque nas fatias ou nos blocos para ver os detalhes. Percentuais sobre o total de gastos do mês.', groupLabel='Demais categorias' }={}) {
++export function pie(items, { label='Distribuição dos gastos por categoria', onPick, caption='Toque nas fatias ou nos blocos para ver os detalhes. Percentuais sobre o total de gastos do mês.', groupLabel='Demais categorias', collapsible=false }={}) {
+   const entries=items.filter(x=>Number(x.value)>0).sort((a,b)=>b.value-a.value);
+   const total=entries.reduce((sum,x)=>sum+Number(x.value),0);
+   if(!total) return h('div.budget-pie-empty',h('b','Seu mapa de gastos começa aqui'),h('p','Nenhum gasto registrado neste mês. Os lançamentos vão preencher o gráfico automaticamente.'));
+@@ -67,5 +67,6 @@
+     table.append(h('button',{type:'button',onclick:()=>onPick?.({...item,share,total}),'aria-label':item.label+': '+money0(item.value)+' · '+pct(share)},
+       h('span',h('i',{'aria-hidden':'true',vars:{'--slice-color':color}}),item.label),h('b',money0(item.value)),h('small',pct(share))));
+   });
+-  return h('div.budget-pie',h('div.budget-graphic-window',chart),h('p.budget-chart-caption',caption),table);
++  const breakdown=collapsible?h('details.chart-breakdown-toggle',h('summary','Ver detalhamento ('+entries.length+')'),table):table;
++  return h('div.budget-pie',h('div.budget-graphic-window',chart),h('p.budget-chart-caption',caption),breakdown);
+ }
+--- a/js/views/investment-charts.js
++++ b/js/views/investment-charts.js
+@@ -18,7 +18,7 @@
+     return {key,items,paid:round2(items.filter(received).reduce((a,t)=>a+num(t.value),0)),pending:round2(items.filter(t=>!received(t)).reduce((a,t)=>a+num(t.value),0))};});
+ }
+ function ring(items,label,onPick){
+- return pie(items,{label,groupLabel:'Demais investimentos',caption:'Toque nas fatias, nos blocos ou na tabela para consultar os investimentos. Percentuais sobre o valor atual da carteira.',onPick:picked=>{
++ return pie(items,{label,collapsible:true,groupLabel:'Demais investimentos',caption:'Toque nas fatias, nos blocos ou na tabela para consultar os investimentos. Percentuais sobre o valor atual da carteira.',onPick:picked=>{
+   if(!picked.members)return onPick?.(picked);
+   openSheet({title:picked.label,subtitle:money(picked.value)+' · '+percent(picked.share)+' da carteira',content:h('div.list',picked.members.map(item=>h('button.tx',{type:'button',onclick:()=>onPick?.({...item,share:item.value/picked.total,total:picked.total})},h('span.tx-main',item.label),h('b',money(item.value)))))});
+  }});
+--- a/app.css
++++ b/app.css
+@@ -1382,3 +1382,8 @@
+ .chart-tooltip[hidden]{display:none}
+ @keyframes chartReveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+ @media(prefers-reduced-motion:reduce){.chart-visible,.viz-bar-track i,.viz-progress-track i{animation:none!important}.chart-enhanced *{transition:none!important}}
++
++.chart-breakdown-toggle{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
++.chart-breakdown-toggle>summary{padding:12px 16px;cursor:pointer;font-size:.82rem;font-weight:700;color:var(--plum);background:var(--sunk)}
++.chart-breakdown-toggle>summary:focus-visible{outline:2px solid var(--plum);outline-offset:-3px}
++.chart-breakdown-toggle[open]>.budget-breakdown{margin:0;border-radius:0;border:0}
+--- a/index.html
++++ b/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.17" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.17" type="module"></script>
++<link href="app.css?v=11.41.18" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.18" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/sw.js
++++ b/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-17-investment-order';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.17', './js/main.js?v=11.41.17', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-18-collapsed-breakdown';
++const SHELL = ['./', './index.html', './app.css?v=11.41.18', './js/main.js?v=11.41.18', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {

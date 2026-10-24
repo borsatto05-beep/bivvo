@@ -1,0 +1,65 @@
+--- a/js/views/loan-share.js
++++ b/js/views/loan-share.js
+@@ -1,14 +1,21 @@
+ import { h, money, shortDate } from '../util.js';
+ import { openSheet, toast } from '../ui.js';
++const messageDate=date=>shortDate(date)+'/'+String(date).slice(0,4);
+ export function loanMessage(loan,{title='Resumo do empréstimo',payment,cycle}={}){
+  const principal=Number(loan.principal||0),interest=Math.max(0,Number(loan.interestDue??(loan.interestMode==='fixed'?loan.interestFixed:principal*Number(loan.interestRate||0)/100))||0);
+- const lines=['Bivvo · '+title,'Cliente: '+loan.person];
+- if(payment)lines.push('Pagamento em '+shortDate(payment.date)+': '+money(payment.amount),'Juros pagos: '+money(payment.interest),'Principal pago: '+money(payment.principal));
+- if(cycle)lines.push('Renovação em '+shortDate(cycle.date),'Principal do ciclo: '+money(cycle.principal),'Juros do ciclo: '+money(cycle.interest),'Vencimento do ciclo: '+shortDate(cycle.due),...(cycle.capitalized?['Juros capitalizados: '+money(cycle.capitalized)]:[]));
+- if(payment||cycle)lines.push('','Situação atual do contrato:');
+- lines.push('Principal restante: '+money(principal),'Juros pendentes: '+money(interest),'Total a receber: '+money(principal+interest),'Situação: '+(loan.status==='paid'||principal+interest<=.004?'Quitado':'Em aberto'));
+- if(loan.due)lines.push('Vencimento atual: '+shortDate(loan.due));
+- if(payment?.autoRenewed)lines.push('Após este pagamento, o contrato foi renovado automaticamente para o próximo ciclo.');
++ const period=loan.periodicity==='monthly'?'ao mês':'único';
++ const rate=Number(loan.interestRate||0).toLocaleString('pt-BR',{maximumFractionDigits:4});
++ const agreement=loan.interestMode==='fixed'?money(loan.interestFixed||0):rate+'%';
++ const paid=loan.status==='paid'||principal+interest<=.004;
++ const heading=payment?'Comprovante de pagamento':cycle?'Renovação do seu empréstimo':title==='Contrato atualizado'?'Seu empréstimo foi atualizado':title==='Empréstimo registrado'?'Seu empréstimo foi registrado':'Resumo do seu empréstimo';
++ const lines=['Olá, '+loan.person+'! 👋','','📋 *'+heading+'*','','💵 Valor emprestado: '+money(loan.principalOriginal??principal),'📈 Juros combinados: '+agreement+' ('+period+')'];
++ if(payment)lines.push('','✅ *Pagamento registrado*','📅 Data: '+messageDate(payment.date),'💰 Valor recebido: '+money(payment.amount),'📈 Juros pagos: '+money(payment.interest),'💵 Valor abatido do empréstimo: '+money(payment.principal));
++ if(cycle)lines.push('','🔄 *Renovação registrada*','📅 Data: '+messageDate(cycle.date),'💵 Valor emprestado no ciclo: '+money(cycle.principal),'📈 Juros do ciclo: '+money(cycle.interest),'📅 Vencimento do ciclo: '+messageDate(cycle.due),...(cycle.capitalized?['➕ Juros incorporados ao valor emprestado: '+money(cycle.capitalized)]:[]));
++ lines.push('','🧾 *O que falta pagar*','Valor emprestado restante: '+money(principal),'Juros a pagar: '+money(interest),'','💰 *Total a pagar: '+money(principal+interest)+'*');
++ if(!paid&&loan.due)lines.push('📅 *Vencimento: '+messageDate(loan.due)+'*');
++ if(paid)lines.push('✅ *Empréstimo quitado!*');
++ if(payment?.autoRenewed)lines.push('','🔄 Após este pagamento, o contrato foi renovado automaticamente para o próximo ciclo.');
++ lines.push('','O total acima já considera os pagamentos registrados.');
+  return lines.join('\n');
+ }
+ export function shareLoan(loan,options={}){
+--- a/app.css
++++ b/app.css
+@@ -1389,3 +1389,5 @@
+ .chart-breakdown-toggle[open]>.budget-breakdown{margin:0;border-radius:0;border:0}
+ 
+ .loan-event>.btn{grid-column:2 / -1;justify-self:start;margin:4px 0 6px}.loan-row .btn-row{flex-wrap:wrap}
++
++.loan-share-message{min-height:340px;line-height:1.75;padding:20px;border-radius:18px;background:#f0faf4;color:#183b2b;border:1px solid #cbe4d4;resize:vertical;font-family:inherit;font-size:.9rem;box-shadow:0 3px 12px #183b2b08}
+--- a/index.html
++++ b/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.19" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.19" type="module"></script>
++<link href="app.css?v=11.41.20" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.20" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/sw.js
++++ b/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-19-loan-sharing';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.19', './js/main.js?v=11.41.19', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-20-loan-message';
++const SHELL = ['./', './index.html', './app.css?v=11.41.20', './js/main.js?v=11.41.20', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {

@@ -1,0 +1,67 @@
+--- a/bivvo_1139/js/views/home.js
++++ b/bivvo_1139/js/views/home.js
+@@ -36,8 +36,8 @@
+   }
+   const sp = F.spendable(s);
+   const controlDetector = financialControlDetector(s);
+-  const left = h('div.col'), right = h('div.col');
+-  left.append(recoveryHomeCard(s));
++  const left = h('div.col'), right = h('div.col'), end = h('div.home-end');
++  end.append(recoveryHomeCard(s));
+ 
+   /* ---------- herói: "quanto posso gastar" (resumo quando olho, detalhes quando toco) ---------- */
+   const big = h('strong.hero-num');
+@@ -83,14 +83,14 @@
+   ];
+   const activationDone = activation.filter(x => x[1]).length;
+   if (!valueSeen) {
+-    left.append(h('section.card.activation-card',
++    end.append(h('section.card.activation-card',
+       h('div.card-head', h('div', h('small.eyebrow-soft','PRIMEIRO VALOR'), h('h3','Descubra quanto pode gastar')), h('b', `${activationDone}/3`)),
+       h('p.muted.sm','Renda, saldo e contas principais. O resto pode ficar para depois.'),
+       h('div.activation-list', activation.map(([label,done,fn]) => h('button.activation-item'+(done?'.done':''), { type:'button', disabled:done, onclick:fn }, h('span', done?'✓':'○'), h('span',label), done?null:h('span','›')))),
+       h('button.btn.sm.primary',{type:'button',onclick:()=>startOnboarding({})},'Terminar configuração')));
+     try { if (!sessionStorage.getItem('bivvo_activation_started_8193')) { sessionStorage.setItem('bivvo_activation_started_8193','1'); adminTrack('activation_started','home').catch(()=>{}); } } catch {}
+   } else {
+-    left.append(h('section.card.activation-card.done',
++    end.append(h('section.card.activation-card.done',
+       h('small.eyebrow-soft','BIVVO CONFIGURADO'), h('h3','Agora você já tem uma visão do seu dinheiro'),
+       h('p.muted.sm', sp.tone === 'neg' ? `Seus compromissos passam do saldo em ${money0(-sp.free)}.` : `${money0(sp.free)} estão livres até ${sp.next.source === 'mes' ? 'o fim do mês' : dayLabel(sp.until).toLowerCase()} — cerca de ${money0(sp.perDay)} por dia.`),
+       h('div.btn-row',
+@@ -99,14 +99,14 @@
+   }
+ 
+   /* ---------- Bivvo Copiloto 11.22 ---------- */
+-  left.append(h('section.card.copilot-home',
++  end.append(h('section.card.copilot-home',
+     h('div.card-head',h('div',h('small.eyebrow-soft','BIVVO COPILOTO'),h('h3','O que preciso saber hoje?')),h('span.copilot-mini '+(sp.state==='negative'?'danger':sp.tone==='warn'?'warn':'ok'),sp.state==='negative'?'SOS':sp.tone==='warn'?'Atenção':'Em dia')),
+     h('p.muted.sm',sp.state==='negative'?`Seus compromissos passam do dinheiro disponível em ${money0(-sp.free)}.`:`Você tem ${money0(Math.max(0,sp.free))} realmente livres — cerca de ${money0(sp.perDay)} por dia.`),
+     controlDetector.top?h('div.copilot-home-risk',`⚠ ${controlDetector.top.title}`):h('div.copilot-home-risk','✓ Nenhum sinal forte de descontrole agora'),
+     h('div.btn-row',h('button.btn.primary',{type:'button',onclick:()=>openCopilot()},'Abrir Copiloto'),h('button.btn',{type:'button',onclick:()=>openCopilot({sos:true})},'SOS financeiro'))));
+ 
+   /* ---------- Fase 3: Bivvo IA ---------- */
+-  left.append(h('button.card.ai-home', { type:'button', onclick:()=>go('assistente') },
++  end.append(h('button.card.ai-home', { type:'button', onclick:()=>go('assistente') },
+     h('span.ai-home-ico', {'aria-hidden':'true'}, '✦'),
+     h('span', h('b','Pergunte ao Bivvo IA'), h('small','Entenda seu dinheiro com os números que o Bivvo já calculou.')) ,
+     h('span.ai-home-go', {'aria-hidden':'true'}, '›')));
+@@ -188,7 +188,7 @@
+   const recent = s.transactions.filter(t => t.date <= t0 && (t.status === 'Pago' || t.method === 'Crédito')).sort((x, y) => y.date.localeCompare(x.date) || (y.createdAt || 0) - (x.createdAt || 0)).slice(0, 5);
+   if (recent.length) left.append(h('section.card', sectionTitle('Últimos lançamentos', { label: 'Extrato', fn: () => go('extrato') }), h('div.list', recent.map(t => txRow(t, { showDate: true })))));
+ 
+-  root.append(head, h('div.home-grid', left, right));
++  root.append(head, h('div.home-grid', left, right), end);
+ }
+ 
+ function checkinCard() {
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-6-category-purchases';
++const VERSION = 'bivvo-v11-41-7-home-order';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));

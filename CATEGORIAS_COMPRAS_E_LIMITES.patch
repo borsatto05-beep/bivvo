@@ -1,0 +1,125 @@
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -26,7 +26,6 @@
+ /* ---------------- orçamento ---------------- */
+ function budget(root) {
+   const s = store.getState(), ym = ctx.month, sm = F.monthSummary(ym, s);
+-  const rows = F.budgetRows(ym, s);
+   const target = round2(sm.income * s.savingPlan.percent / 100);
+   const pctInput = h('input.input.sm.pct-input', { type: 'number', inputmode: 'decimal', min: 0, max: 100, step: 1, value: s.savingPlan.percent, 'aria-label': 'Percentual da renda para guardar' });
+   pctInput.addEventListener('change', () => { const v = Math.min(100, Math.max(0, num(pctInput.value))); store.commit(st => { st.savingPlan.percent = v; }); toast(`Meta de guardar: ${v}% da renda`); });
+@@ -39,25 +38,6 @@
+ 
+   root.append(budgetReport(ym, s, sm));
+ 
+-  if (!rows.length) {
+-    const sug = F.suggestBudgets(s);
+-    root.append(emptyState({ icon: '🎯', title: 'Defina limites para o que mais pesa', text: sug.length ? `Pela sua média, ${sug[0].cat} gira em torno de ${money0(sug[0].value)} por mês. O Bivvo pode sugerir limites para você ajustar.` : 'Escolha algumas categorias e um teto mensal para cada uma. O Bivvo avisa quando chegar perto.', action: { label: 'Definir limites', fn: openBudgetForm } }));
+-    return;
+-  }
+-  const totalLimit = rows.reduce((a, r) => a + r.limit, 0), totalSpent = rows.reduce((a, r) => a + Math.min(r.spent, r.limit * 10), 0);
+-  const [y, m] = ym.split('-').map(Number), dim = new Date(y, m, 0).getDate();
+-  const day = ym === ymOf(today()) ? Number(today().slice(8)) : ym < ymOf(today()) ? dim : 0;
+-  root.append(h('section.card',
+-    h('div.card-head', h('h3', 'Limites de ' + monthName(ym)), h('button.link.sm', { type: 'button', onclick: openBudgetForm }, 'Editar')),
+-    h('p.muted.sm', `${money0(totalSpent)} de ${money0(totalLimit)} usados · ${Math.round(day / dim * 100)}% do mês passou`),
+-    h('div.budget-list', rows.map(r => {
+-      const tone = r.ratio >= 1 ? 'bad' : r.ratio >= 0.8 ? 'warn' : 'good';
+-      const paceAhead = day > 0 && day < dim && r.ratio > day / dim + 0.15;
+-      return h('div.brow',
+-        h('div.brow-top', h('span', h('i', { 'aria-hidden': 'true' }, catIcon(r.cat)), r.cat), h('b', `${money0(r.spent)} / ${money0(r.limit)}`)),
+-        progress(r.spent, r.limit, tone),
+-        h('small.muted', r.left >= 0 ? `${money0(r.left)} disponível${paceAhead ? ' · ritmo acima do mês' : ''}` : `${money0(-r.left)} acima do limite`));
+-    }))));
+ }
+ 
+ /* ---------------- metas ---------------- */
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1286,3 +1286,16 @@
+ .budget-report-notes{grid-template-columns:1fr;padding:16px 12px}
+ .budget-report-source{padding:14px}
+ }
++
++/* Compras da categoria e acesso recolhido aos limites. */
++.category-purchases{display:grid;gap:18px}
++.category-purchase-list{list-style:none;padding:0;margin:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
++.category-purchase-list li{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:14px;border-bottom:1px solid var(--line)}
++.category-purchase-list li:last-child{border-bottom:0}
++.category-purchase-list li>div{min-width:0}
++.category-purchase-list b{display:block;overflow-wrap:anywhere;font-size:.9rem}
++.category-purchase-list small{display:block;font-size:.74rem;color:var(--ink-2);margin-top:5px}
++.category-purchase-list strong{white-space:nowrap;font-size:.9rem}
++.budget-limits-action{padding:0 20px 20px}
++.budget-limits-action .btn{width:100%}
++@media(max-width:420px){.category-purchase-list li{padding:12px;gap:10px}.category-purchase-list strong{font-size:.8rem}}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,7 +1,7 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-5-extrato-infographic';
++const VERSION = 'bivvo-v11-41-6-category-purchases';
+ const SHELL = ['./', './index.html', './app.css?v=11.41.1', './js/main.js?v=11.29.1', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+--- a/bivvo_1139/js/views/budget-report.js
++++ b/bivvo_1139/js/views/budget-report.js
+@@ -1,7 +1,8 @@
+ /* Relatório mensal compartilhado entre Orçamento e Extrato. */
+-import { h, money, monthLabel, ymOf, today, round2 } from '../util.js';
++import { h, money, monthLabel, ymOf, today, round2, shortDate } from '../util.js';
+ import * as F from '../finance.js';
+-import { openSheet } from '../ui.js';
++import { openSheet, progress, catIcon } from '../ui.js';
++import { openBudgetForm } from './forms.js';
+ import { stat } from './components.js';
+ import { pie } from '../charts.js';
+ 
+@@ -15,13 +16,29 @@
+   const exceeded=rows.filter(r=>r.spent>r.limit);
+   const top=spending[0];
+   const showCategory=item=>{
+-    const row=rows.find(r=>r.cat===item.label);
+-    openSheet({title:item.label,subtitle:monthLabel(ym),content:h('div',
+-      h('div.stats',stat('Gasto no mês',money(item.value)),
++    const categories=new Set(item.members?item.members.map(c=>c.label):[item.label]);
++    const transactions=F.monthTx(ym,s).filter(t=>F.isSpend(t)&&categories.has(t.cat)&&(ym!==ymOf(today())||t.date<=today()))
++      .sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
++    openSheet({title:item.label,subtitle:monthLabel(ym),wide:true,content:h('div.category-purchases',
++      h('div.stats',stat('Total no mês',money(item.value)),
+         stat('Parte dos gastos',(item.share*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'),
+-        row?stat('Limite mensal',money(row.limit)):null),
+-      item.members?h('div.budget-group-detail',item.members.map(c=>h('div',h('span',c.label),h('b',money(c.value))))):
+-        h('p.notice',row?(row.left<0?money(-row.left)+' acima do limite.':money(row.left)+' disponível nesta categoria.'):'Esta categoria ainda não tem limite definido.'))});
++        stat('Lançamentos',String(transactions.length))),
++      h('h3','Compras e despesas'),
++      h('ul.category-purchase-list',transactions.map(t=>h('li',
++        h('div',h('b',t.desc||t.cat),h('small',[shortDate(t.date),item.members?t.cat:null,t.method,t.status||'Pendente'].filter(Boolean).join(' · '))),
++        h('strong',money(t.value))))),
++      h('p.hint','Lançamentos que compõem esta categoria no gráfico do mês.'))});
++  };
++  const showLimits=()=>{
++    if(!rows.length){openBudgetForm();return;}
++    let sheet;
++    sheet=openSheet({title:'Limites do orçamento',subtitle:monthLabel(ym),wide:true,content:h('div',
++      h('p.muted.sm',money(coveredSpent)+' de '+money(limits)+' usados nas categorias com limite.'),
++      h('div.budget-list',rows.map(r=>h('div.brow',
++        h('div.brow-top',h('span',h('i',{'aria-hidden':'true'},catIcon(r.cat)),r.cat),h('b',money(r.spent)+' / '+money(r.limit))),
++        progress(r.spent,r.limit,r.ratio>=1?'bad':r.ratio>=.8?'warn':'good'),
++        h('small.muted',r.left>=0?money(r.left)+' disponível':money(-r.left)+' acima do limite'))))),
++      footer:[h('button.btn.primary',{type:'button',onclick:()=>{sheet.close();openBudgetForm();}},'Editar limites')]});
+   };
+   return h('section.card.budget-chart',
+     h('div.budget-report-head',
+@@ -38,7 +55,8 @@
+     spent>0?h('div.budget-report-notes',
+       h('div',h('span.eyebrow','MAIOR PARTE DOS GASTOS'),h('b',top.label),h('p',money(top.value)+' · '+(top.value/spent*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'% do total do mês.')),
+       h('div',{class:exceeded.length?'is-over':''},h('span.eyebrow','ATENÇÃO AOS LIMITES'),h('b',rows.length?(exceeded.length?exceeded.length+' categoria'+(exceeded.length>1?'s':'')+' acima do limite':'Tudo dentro dos limites'):'Defina seus limites'),
+-        h('p',exceeded.length?'Excesso somado: '+money(exceeded.reduce((sum,r)=>sum+Math.max(0,-r.left),0))+'.':rows.length?'Acompanhe os valores disponíveis nas categorias abaixo.':'Adicione limites para comparar o planejado com seus gastos.'))):null,
++        h('p',exceeded.length?'Excesso somado: '+money(exceeded.reduce((sum,r)=>sum+Math.max(0,-r.left),0))+'.':rows.length?'Consulte os valores disponíveis no botão de limites.':'Adicione limites para comparar o planejado com seus gastos.'))):null,
++    h('div.budget-limits-action',h('button.btn',{type:'button',onclick:showLimits},rows.length?'Ver limites do orçamento':'Definir limites do orçamento')),
+     h('p.budget-report-source','Fonte: seus lançamentos e limites no Bivvo. '+(ym===ymOf(today())?'Mês em andamento: gastos até hoje; agendados futuros ficam fora do gráfico.':'Gastos registrados no mês selecionado.')+' Inclui categorias sem limite; valores podem incluir pagamentos pendentes.'));
+ 
+ }

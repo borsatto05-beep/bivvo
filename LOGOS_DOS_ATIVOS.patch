@@ -1,0 +1,85 @@
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -9,6 +9,7 @@
+ import { monthSwitcher } from './extrato.js';
+ import { ctx, rerender } from '../nav.js';
+ import { openStoryComposer } from './stories.js';
++import { assetLogo } from '../asset-logo.js';
+ import { investmentCharts } from './investment-charts.js';
+ import { investmentSector, investmentSectorInfo } from '../investment-sectors.js';
+ import { budgetReport } from './budget-report.js';
+@@ -175,7 +176,7 @@
+   root.append(h('section.card', h('div.card-head', h('h3', 'Carteira'), h('button.link.sm', { type: 'button', onclick: refreshQuotes }, 'Atualizar cotações')),
+     h('div.list', s.investments.map(x => {
+       const v = F.investmentValue(x, s), cost = num(x.costBasis ?? x.value), r = v - cost;
+-      return h('button.tx', { type: 'button', onclick: () => openInvestmentForm(x) }, h('span.tx-ico', { 'aria-hidden': 'true' }, '💎'),
++      return h('button.tx', { type: 'button', onclick: () => openInvestmentForm(x) }, assetLogo(x),
+         h('span.tx-main', h('b', x.name), h('small', [x.type, x.quantity ? `${x.quantity} cotas` : null, x.yieldRate ? `${String(x.yieldRate).replace('.', ',')}%${x.yieldType === 'Pós-fixado' ? ' do ' + (x.yieldIndex || 'CDI') : x.yieldPeriod==='monthly'?' a.m.':' a.a.'}` : null].filter(Boolean).join(' · '))),
+         h('span.tx-side', h('b.tx-val', money(v)), h('small.' + (r >= 0 ? 'up' : 'down'), (r >= 0 ? '+' : '') + money(r))));
+     })),
+--- a/bivvo_1139/index.html
++++ b/bivvo_1139/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.14" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.14" type="module"></script>
++<link href="app.css?v=11.41.15" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.15" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/bivvo_1139/netlify.toml
++++ b/bivvo_1139/netlify.toml
+@@ -193,7 +193,7 @@
+     Permissions-Policy = "camera=(self), microphone=(self), geolocation=(), payment=()"
+     Cross-Origin-Opener-Policy = "same-origin"
+     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+-    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-rGBb0uEgmEkW2usZA0PHIIq09uBxuM9C4oDrG7jEqUk=' 'sha256-U5Nxub4vXU8lev8puCvQPqhUm9aNkrXeLBNdwO68XwU=' 'sha256-fvnlkgd6s0WidiWzd+qoWD1zgcJ/QnTEtHnfxEnpZmY=' 'sha256-zV4SR5nX1eTM8a34rFSP8OdxVL8tVWOSE/cN2E8Knl4=' https://cdn.jsdelivr.net https://analytics.tiktok.com; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://gqfirbhzjuzspermyvfy.supabase.co wss://gqfirbhzjuzspermyvfy.supabase.co https://analytics.tiktok.com https://*.tiktok.com; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
++    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-rGBb0uEgmEkW2usZA0PHIIq09uBxuM9C4oDrG7jEqUk=' 'sha256-U5Nxub4vXU8lev8puCvQPqhUm9aNkrXeLBNdwO68XwU=' 'sha256-fvnlkgd6s0WidiWzd+qoWD1zgcJ/QnTEtHnfxEnpZmY=' 'sha256-zV4SR5nX1eTM8a34rFSP8OdxVL8tVWOSE/cN2E8Knl4=' https://cdn.jsdelivr.net https://analytics.tiktok.com; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self' data: blob: https://icons.brapi.dev; font-src 'self'; connect-src 'self' https://gqfirbhzjuzspermyvfy.supabase.co wss://gqfirbhzjuzspermyvfy.supabase.co https://analytics.tiktok.com https://*.tiktok.com; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+ 
+ # 8.15: ferramentas internas e fontes do gerador SEO não devem aparecer no Google.
+ [[headers]]
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1364,3 +1364,8 @@
+ .evolution-controls{display:flex;gap:8px;flex-wrap:wrap}.evolution-controls select{width:auto;max-width:100%}
+ 
+ .portfolio-flow-bar{cursor:pointer}.portfolio-flow-bar:hover{opacity:.8}.portfolio-flow-bar:focus-visible{outline:2px solid var(--plum)}
++
++/* Identidade visual de ações e fundos, com alternativa sem imagem. */
++.asset-logo{position:relative;overflow:hidden;background:var(--sunk);flex-shrink:0}
++.asset-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:5px;background:var(--surface)}
++.asset-monogram{font-size:.75rem;font-weight:800;color:var(--plum)}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-14-portfolio-evolution';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.14', './js/main.js?v=11.41.14', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-15-asset-logos';
++const SHELL = ['./', './index.html', './app.css?v=11.41.15', './js/main.js?v=11.41.15', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {
+--- /dev/null
++++ b/bivvo_1139/js/asset-logo.js
+@@ -0,0 +1,15 @@
++/* Logos públicas dos ativos; a identificação textual permanece quando não há imagem. */
++import { h } from './util.js';
++export function assetLogo(asset){
++ const name=String(asset.ticker||asset.symbol||asset.name||asset.type||'Ativo').trim();
++ const ticker=name.toUpperCase().replace(/\.SA$/,'').match(/\b[A-Z][A-Z0-9]{3}\d{1,2}\b/)?.[0];
++ const initials=ticker?ticker.slice(0,2):name.split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();
++ const root=h('span.tx-ico.asset-logo',{'aria-hidden':'true'},h('span.asset-monogram',initials||'AT'));
++ if(ticker){
++  const img=h('img',{src:'https://icons.brapi.dev/icons/'+encodeURIComponent(ticker)+'.svg',alt:'',loading:'lazy',decoding:'async',referrerPolicy:'no-referrer'});
++  img.addEventListener('error',()=>img.remove(),{once:true});
++  img.addEventListener('load',()=>root.querySelector('.asset-monogram')?.remove(),{once:true});
++  root.append(img);
++ }
++ return root;
++}

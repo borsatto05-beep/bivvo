@@ -1,0 +1,53 @@
+--- a/js/views/plans.js
++++ b/js/views/plans.js
+@@ -133,7 +133,7 @@
+   const s = store.getState(), w = F.wealth(s);
+   root.append(h('div.page-head', h('h2.h2', 'Dinheiro guardado'), h('button.btn.sm.primary', { type: 'button', onclick: () => openInvestmentForm() }, 'Nova aplicação')));
+   root.append(h('div.stats.card.flat', stat('Investido hoje', money0(w.investments)), stat('Resultado', (w.result >= 0 ? '+' : '') + money0(w.result), null, w.result >= 0 ? 'in' : 'neg'), stat('Em metas', money0(w.goals))));
+-  if (!s.investments.length) { root.append(investmentCharts(s, [], ()=>{})); root.append(emptyState({ icon: '💎', title: 'Nenhuma aplicação registrada', text: 'Registre CDBs, Tesouro, ações e fundos para acompanhar o patrimônio junto com o resto das suas finanças.', action: { label: 'Registrar aplicação', fn: () => openInvestmentForm() } })); return; }
++  if (!s.investments.length) { root.append(emptyState({ icon: '💎', title: 'Nenhuma aplicação registrada', text: 'Registre CDBs, Tesouro, ações e fundos para acompanhar o patrimônio junto com o resto das suas finanças.', action: { label: 'Registrar aplicação', fn: () => openInvestmentForm() } })); root.append(investmentCharts(s, [], ()=>{})); return; }
+   // Carteira por ativo: cada ticker/aplicação recebe sua própria fatia. Ativos com o mesmo nome são somados.
+   const byAsset = new Map();
+   for (const x of s.investments) {
+@@ -170,7 +170,8 @@
+     const footer = group.length === 1 ? [h('button.btn.primary', { type: 'button', onclick: () => { sheet.close(); setTimeout(()=>openInvestmentForm(group[0]),240); } }, 'Editar investimento')] : null;
+     const sheet = openSheet({ title: 'Detalhes do ativo', subtitle: picked.label, content: details, footer });
+   };
+-  root.append(investmentCharts(s, assets, showAsset));
++  const charts = investmentCharts(s, assets, showAsset);
++  root.append(charts.querySelector('.invest-allocation'));
+   const cdi = h('input.input.sm.pct-input', { type: 'text', inputmode: 'decimal', value: String(s.cdiReference).replace('.', ','), 'aria-label': 'CDI de referência ao ano' });
+   cdi.addEventListener('change', () => { const v = parseMoney(cdi.value); if (v > 0 && v < 50) { store.commit(st => { st.cdiReference = v; }); toast('CDI de referência atualizado'); } });
+   root.append(h('section.card', h('div.card-head', h('h3', 'Carteira'), h('button.link.sm', { type: 'button', onclick: refreshQuotes }, 'Atualizar cotações')),
+@@ -182,4 +183,5 @@
+     })),
+     h('label.inline.hint', 'CDI de referência para estimar CDBs pós-fixados:', cdi, h('span', '% a.a.')),
+     h('p.hint', 'Valores de renda fixa são estimativas antes de impostos. Ações e fundos usam a última cotação obtida.')));
++  root.append(charts);
+ }
+--- a/index.html
++++ b/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.16" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.16" type="module"></script>
++<link href="app.css?v=11.41.17" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.17" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/sw.js
++++ b/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-16-interactive-charts';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.16', './js/main.js?v=11.41.16', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-17-investment-order';
++const SHELL = ['./', './index.html', './app.css?v=11.41.17', './js/main.js?v=11.41.17', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {

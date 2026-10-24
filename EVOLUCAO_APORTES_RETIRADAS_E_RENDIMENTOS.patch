@@ -1,0 +1,488 @@
+--- a/bivvo_1139/js/demo.js
++++ b/bivvo_1139/js/demo.js
+@@ -1,6 +1,7 @@
+ /* Bivvo — dados de demonstração (fictícios, gerados em memória, relativos à data de hoje).
+    Nunca são gravados na nuvem nem no navegador. */
+ import { today, ymOf, addMonthsYM, dateInYM, addDays, seeded, uid, round2, daysInMonth, isoWeek } from './util.js';
++import { investmentValue } from './finance.js';
+ import { emptyState, addCardPurchase, generateRecurring, invoiceKeyFor } from './store.js';
+ 
+ export function buildDemo() {
+@@ -91,6 +92,7 @@
+   const extraAssets=[['PETR4','Ações',37.5],['VALE3','Ações',58],['ITUB4','Ações',34],['BBAS3','Ações',27],['HYPE3','Ações',22],['USIM5','Ações',6.8],['TAEE11','Ações',35],['VIVT3','Ações',28],['HGLG11','Fundos',155],['XPML11','Fundos',102],['KNRI11','Fundos',145],['IVVB11','Fundos',310],['BOVA11','Fundos',125],['HASH11','Fundos',68]];
+   extraAssets.forEach(([name,type,price],i)=>{const quantity=type==='Fundos'?2:5, cost=round2(quantity*price*.95);s.investments.push({id:uid(),name,type,quantity,marketPrice:price,purchasePrice:round2(price*.95),value:cost,costBasis:cost,purchaseDate:dateInYM(addMonthsYM(cur,-(i%6)),i%6===0?Math.min(day0,5):5)});});
+   for(const inv of s.investments){
++    if(['Ações','Fundos'].includes(inv.type))inv.quoteAt=t0;
+     if(inv.purchaseDate>t0)inv.purchaseDate=t0;
+     inv.txId=uid();tx(inv.purchaseDate,'Aplicação em '+inv.name,'Investimentos',inv.costBasis,{id:inv.txId,kind:'save',investmentId:inv.id,method:'Transferência'});
+   }
+@@ -112,6 +114,14 @@
+     { id: uid(), type: 'cut', cat: 'Delivery', value: 0, startedAt: dateInYM(cur, 1), endsAt: dateInYM(cur, 31), baseline: 330, status: 'active' },
+     { id: uid(), type: 'log7', value: 0, startedAt: addDays(t0, -12), endsAt: addDays(t0, -6), status: 'done', completedAt: addDays(t0, -6) }
+   ];
++  s.profile.investmentValuations=[];
++  for(let i=5;i>=1;i--){
++    const ym=addMonthsYM(cur,-i),[year,month]=ym.split('-').map(Number),date=dateInYM(ym,daysInMonth(year,month));
++    for(const inv of s.investments.filter(x=>x.purchaseDate<=date)){
++      if(['CDB','Renda fixa'].includes(inv.type)){if(inv.yieldType==='Pós-fixado')s.profile.investmentValuations.push({investmentId:inv.id,date,value:investmentValue(inv,s,date),source:'Demonstração · saldo fictício da renda fixa'});continue;}
++      s.profile.investmentValuations.push({investmentId:inv.id,date,value:round2(inv.quantity*inv.purchasePrice),source:'Demonstração · preço de compra cadastrado'});
++    }
++  }
+   s.profile.checkins = [1, 2, 3].map(n => isoWeek(addDays(t0, -7 * n)));
+   generateRecurring(s);
+   return s;
+--- a/bivvo_1139/js/finance.js
++++ b/bivvo_1139/js/finance.js
+@@ -5,8 +5,9 @@
+      saldo quando a fatura é paga.
+    - Fatura = soma das parcelas/compras cujo ciclo de fechamento cai naquele mês. Nunca o total parcelado.
+    - Limite comprometido = tudo que ainda não foi pago no cartão (inclui parcelas futuras). */
++import { isInvestmentDividend, dividendAssetId } from './investment-income.js';
+ import { getState, getVersion, invoiceKeyFor } from './store.js';
+-import { today, ymOf, addMonthsYM, dateInYM, diffDays, addDays, daysInMonth, num, round2, sum, parseISO, isoWeek } from './util.js';
++import { today, ymOf, addMonthsYM, addMonthsDate, dateInYM, diffDays, addDays, daysInMonth, num, round2, sum, parseISO, isoWeek } from './util.js';
+ 
+ const SAVE_CATS = new Set(['Investimentos', 'Reserva de Emergência', 'Guardado']);
+ export const isOpening = t => t.kind === 'opening' || t.cat === 'Saldo inicial';
+@@ -349,12 +350,22 @@
+ }
+ 
+ /* ---------- patrimônio ---------- */
+-export function investmentValue(x, s = getState()) {
++export function investmentCompoundFactor(rate, period, start, end){
++ if(end<=start)return 1;
++ if(period!=='monthly')return Math.pow(1+rate/100,Math.max(0,diffDays(start,end))/365);
++ let months=(Number(end.slice(0,4))-Number(start.slice(0,4)))*12+Number(end.slice(5,7))-Number(start.slice(5,7));
++ let anchor=addMonthsDate(start,months);
++ if(anchor>end){months--;anchor=addMonthsDate(start,months);}
++ const next=addMonthsDate(start,months+1),fraction=Math.max(0,diffDays(anchor,end))/Math.max(1,diffDays(anchor,next));
++ return Math.pow(1+rate/100,months+fraction);
++}
++export function investmentValue(x, s = getState(), asOf=today()) {
+   if ((x.type === 'Renda fixa' || x.type === 'CDB') && num(x.value) > 0 && x.yieldRate != null && x.purchaseDate) {
+-    const days = Math.max(0, diffDays(x.purchaseDate, today()));
+-    let annual = num(x.yieldRate) / 100;
+-    if (String(x.yieldType || '') === 'Pós-fixado' && ['CDI', 'SELIC'].includes(String(x.yieldIndex || 'CDI'))) annual = (num(s.cdiReference) * num(x.yieldRate) / 100) / 100;
+-    return round2(num(x.value) * Math.pow(1 + annual, days / 365));
++    let rate=num(x.yieldRate),period=x.yieldPeriod==='monthly'?'monthly':'annual';
++    if(String(x.yieldType||'')==='Pós-fixado'&&['CDI','SELIC'].includes(String(x.yieldIndex||'CDI'))){rate=num(s.cdiReference)*rate/100;period='annual';}
++    const factor=date=>investmentCompoundFactor(rate,period,date,asOf);
++    const paidOut=(s.transactions||[]).filter(t=>isInvestmentDividend(t)&&isPaid(t)&&t.date>x.purchaseDate&&t.date<=asOf&&dividendAssetId(t,s)===x.id).reduce((a,t)=>a+num(t.value)*factor(t.date),0);
++    return round2(Math.max(0,num(x.value)*factor(x.purchaseDate)-paidOut));
+   }
+   if (num(x.quantity) > 0 && num(x.marketPrice) > 0) return round2(num(x.quantity) * num(x.marketPrice));
+   return round2(num(x.currentValue ?? x.value ?? x.costBasis));
+--- a/bivvo_1139/js/views/forms.js
++++ b/bivvo_1139/js/views/forms.js
+@@ -472,11 +472,12 @@
+   const value = moneyInput(inv?.costBasis ?? inv?.value, { label: 'Valor aplicado' });
+   const yieldType = select(['Pós-fixado', 'Prefixado'], inv?.yieldType || 'Pós-fixado', 'Tipo de rendimento');
+   const rate = h('input.input', { type: 'text', inputmode: 'decimal', value: inv?.yieldRate ?? '', placeholder: 'Ex.: 110' });
++  const yieldPeriod=select([{value:'annual',label:'Ao ano'},{value:'monthly',label:'Ao mês'}],inv?.yieldPeriod||'annual','Periodicidade da taxa');
+   const index = select(['CDI', 'SELIC', 'IPCA', 'Outro'], inv?.yieldIndex || 'CDI', 'Indexador');
+   const date = h('input.input', { type: 'date', value: inv?.purchaseDate || today() });
+   const fromBalance = toggle('Tirar do meu saldo', !inv, 'Registra a aplicação como dinheiro guardado no mês');
+   const market = h('div.subform', field('Ativo (ticker)', name), sugg, h('div.row2', field('Quantidade', qty), field('Preço pago por cota', price)), quoteMsg);
+-  const fixedInc = h('div.subform', field('Nome', name.cloneNode()), h('div.row2', field('Rendimento', yieldType), field('Taxa (%)', rate)), field('Indexador', index), h('p.hint', 'Pós-fixado: % do indexador (ex.: 110% do CDI). Prefixado: taxa ao ano.'));
++  const fixedInc = h('div.subform', field('Nome', name.cloneNode()), h('div.row2', field('Rendimento', yieldType), field('Taxa (%)', rate)), field('Periodicidade da taxa prefixada',yieldPeriod,'Ao mês ou ao ano. Taxas pós-fixadas usam o indexador anual de referência.'), field('Indexador', index), h('p.hint', 'Pós-fixado: % do indexador (ex.: 110% do CDI). Prefixado: taxa ao mês ou ao ano, conforme a periodicidade escolhida.'));
+   const nameFixed = fixedInc.querySelector('input'); nameFixed.value = inv?.name || '';
+   const plain = h('div.subform', field('Nome', h('input.input', { value: inv?.name || '', maxLength: 40, placeholder: 'Ex.: Poupança Caixa' })));
+   const namePlain = plain.querySelector('input');
+@@ -512,13 +513,14 @@
+     const q = parseMoney(qty.value), p = price.getValue();
+     const cost = isMarket ? round2(q * p) : value.getValue();
+     if (!nm) { msg.textContent = 'Informe o nome do investimento.'; return; }
++    if(isFixed&&(parseMoney(rate.value)<=-100||(yieldType.value==='Pós-fixado'&&parseMoney(rate.value)<0))){msg.textContent='Informe uma taxa válida para o investimento.';return;}
+     if (!(cost > 0)) { msg.textContent = isMarket ? 'Informe quantidade e preço pago.' : 'Informe o valor aplicado.'; return; }
+     store.commit(s => {
+       const base = inv ? s.investments.find(x => x.id === inv.id) : { id: uid() };
+       Object.assign(base, { type: t, name: nm, sector: sectorInput.value.trim(), value: cost, costBasis: cost, purchaseDate: date.value || today() });
+-      if (isMarket) Object.assign(base, { quantity: q, purchasePrice: p, marketPrice: num(quoteMsg.dataset.price) || base.marketPrice || p });
++      if (isMarket) {Object.assign(base, { quantity: q, purchasePrice: p, marketPrice: num(quoteMsg.dataset.price) || base.marketPrice || p });if(num(quoteMsg.dataset.price))base.quoteAt=today();}
+       else { delete base.quantity; delete base.purchasePrice; delete base.marketPrice; }
+-      if (isFixed) Object.assign(base, { yieldType: yieldType.value, yieldRate: parseMoney(rate.value), yieldIndex: index.value }); else { delete base.yieldRate; }
++      if (isFixed) Object.assign(base, { yieldType: yieldType.value, yieldRate: parseMoney(rate.value), yieldIndex: index.value, yieldPeriod: yieldPeriod.value }); else { delete base.yieldRate; }
+       if (!inv) {
+         s.investments.push(base);
+         if (fromBalance.input.checked) { const tx = { id: uid(), date: base.purchaseDate, desc: `Aplicação em ${nm}`, cat: 'Investimentos', type: 'expense', kind: 'save', value: cost, status: 'Pago', method: 'Transferência', investmentId: base.id, createdAt: Date.now() }; s.transactions.push(tx); base.txId = tx.id; }
+@@ -532,7 +534,7 @@
+     const ok = await confirmSheet({ title: `Resgatar ${inv.name}?`, message: `Valor estimado hoje: ${money(current)}. O investimento sai da sua carteira.`, confirmLabel: 'Resgatar', danger: true, extra: credit });
+     if (!ok) return;
+     sheet.close(); store.markDeleted(inv.id);
+-    store.commit(s => { s.investments = s.investments.filter(x => x.id !== inv.id); if (credit.input.checked && current > 0) s.transactions.push({ id: uid(), date: today(), desc: `Resgate de ${inv.name}`, cat: 'Rendimentos', type: 'income', kind: 'withdraw', value: current, status: 'Pago', method: 'Transferência', createdAt: Date.now() }); });
++    store.commit(s => { s.profile.investmentArchive=[...(s.profile.investmentArchive||[]).filter(x=>x.id!==inv.id),{...inv,closedAt:today()}]; s.investments = s.investments.filter(x => x.id !== inv.id); if (credit.input.checked && current > 0) s.transactions.push({ id: uid(), date: today(), desc: `Resgate de ${inv.name}`, investmentId:inv.id,transactionRole:'investment_withdrawal', cat: 'Rendimentos', type: 'income', kind: 'withdraw', value: current, status: 'Pago', method: 'Transferência', createdAt: Date.now() }); });
+     toast('Investimento resgatado');
+   }
+ }
+--- a/bivvo_1139/js/views/plans.js
++++ b/bivvo_1139/js/views/plans.js
+@@ -161,7 +161,7 @@
+         qtyTotal > 0 ? h('div', h('span', 'Quantidade'), h('b', String(round2(qtyTotal)).replace('.', ','))) : null,
+         first.marketPrice ? h('div', h('span', 'Última cotação'), h('b', money(first.marketPrice))) : null,
+         first.purchasePrice ? h('div', h('span', 'Preço médio registrado'), h('b', money(first.purchasePrice))) : null,
+-        first.yieldRate ? h('div', h('span', 'Rendimento'), h('b', `${String(first.yieldRate).replace('.', ',')}%${first.yieldType === 'Pós-fixado' ? ' do ' + (first.yieldIndex || 'CDI') : ' a.a.'}`)) : null,
++        first.yieldRate ? h('div', h('span', 'Rendimento'), h('b', `${String(first.yieldRate).replace('.', ',')}%${first.yieldType === 'Pós-fixado' ? ' do ' + (first.yieldIndex || 'CDI') : first.yieldPeriod==='monthly'?' a.m.':' a.a.'}`)) : null,
+         first.purchaseDate ? h('div', h('span', 'Primeira aplicação'), h('b', shortDate(first.purchaseDate))) : null
+       ),
+       h('p.hint', group.length > 1 ? `${group.length} registros de ${picked.label} foram somados nesta fatia.` : 'Toque em editar para alterar os dados deste investimento.')
+@@ -176,7 +176,7 @@
+     h('div.list', s.investments.map(x => {
+       const v = F.investmentValue(x, s), cost = num(x.costBasis ?? x.value), r = v - cost;
+       return h('button.tx', { type: 'button', onclick: () => openInvestmentForm(x) }, h('span.tx-ico', { 'aria-hidden': 'true' }, '💎'),
+-        h('span.tx-main', h('b', x.name), h('small', [x.type, x.quantity ? `${x.quantity} cotas` : null, x.yieldRate ? `${String(x.yieldRate).replace('.', ',')}%${x.yieldType === 'Pós-fixado' ? ' do ' + (x.yieldIndex || 'CDI') : ' a.a.'}` : null].filter(Boolean).join(' · '))),
++        h('span.tx-main', h('b', x.name), h('small', [x.type, x.quantity ? `${x.quantity} cotas` : null, x.yieldRate ? `${String(x.yieldRate).replace('.', ',')}%${x.yieldType === 'Pós-fixado' ? ' do ' + (x.yieldIndex || 'CDI') : x.yieldPeriod==='monthly'?' a.m.':' a.a.'}` : null].filter(Boolean).join(' · '))),
+         h('span.tx-side', h('b.tx-val', money(v)), h('small.' + (r >= 0 ? 'up' : 'down'), (r >= 0 ? '+' : '') + money(r))));
+     })),
+     h('label.inline.hint', 'CDI de referência para estimar CDBs pós-fixados:', cdi, h('span', '% a.a.')),
+--- a/bivvo_1139/index.html
++++ b/bivvo_1139/index.html
+@@ -22,8 +22,8 @@
+ <link href="favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+ <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+ <link as="font" crossorigin="" href="fonts/bricolage.woff2" rel="preload" type="font/woff2"/>
+-<link href="app.css?v=11.41.13" rel="stylesheet"/>
+-<script src="js/main.js?v=11.41.13" type="module"></script>
++<link href="app.css?v=11.41.14" rel="stylesheet"/>
++<script src="js/main.js?v=11.41.14" type="module"></script>
+ <!-- TikTok Pixel: external file to comply with CSP -->
+ <script defer="" src="js/tiktok-pixel.js?v=11.20.5"></script>
+ <link href="/seo-premium-1140.css?v=11.40.0" rel="stylesheet"/><script defer="True" src="/seo-premium-1140.js?v=11.40.0"></script></head>
+--- a/bivvo_1139/app.css
++++ b/bivvo_1139/app.css
+@@ -1346,3 +1346,21 @@
+ 
+ .dividend-empty{padding:28px 18px;text-align:center;border:1px dashed var(--line);border-radius:14px;margin:18px 0;background:var(--sunk)}
+ .dividend-empty p{font-size:.83rem;color:var(--ink-2);max-width:560px;margin:10px auto 16px}
++
++.portfolio-actions{margin:16px 0}
++.portfolio-evolution>.card-head{flex-wrap:wrap;gap:12px}
++.portfolio-evolution>.card-head select{width:auto}
++.portfolio-evolution-body{display:grid;gap:14px}
++.portfolio-evolution-body .dividend-key{margin:4px 0}
++.dividend-key .flow-color{background:var(--slice-color)}
++.portfolio-table-scroll{overflow-x:auto}
++.portfolio-history-table{min-width:1040px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
++.portfolio-history-head,.portfolio-history-table>button{display:grid;grid-template-columns:80px repeat(7,minmax(110px,1fr));gap:12px;align-items:center;padding:12px;width:100%;text-align:right;font-size:.76rem}
++.portfolio-history-head{background:var(--sunk);font-weight:750}
++.portfolio-history-table>button{border-top:1px solid var(--line)}
++.portfolio-history-table>button:hover{background:var(--sunk)}
++.portfolio-history-head>:first-child,.portfolio-history-table>button>:first-child{text-align:left}
++
++.evolution-controls{display:flex;gap:8px;flex-wrap:wrap}.evolution-controls select{width:auto;max-width:100%}
++
++.portfolio-flow-bar{cursor:pointer}.portfolio-flow-bar:hover{opacity:.8}.portfolio-flow-bar:focus-visible{outline:2px solid var(--plum)}
+--- a/bivvo_1139/sw.js
++++ b/bivvo_1139/sw.js
+@@ -1,8 +1,8 @@
+ /* Bivvo v10.4 — service worker.
+    HTML, JS e CSS: rede primeiro (nunca mistura versões), cache só como reserva offline.
+    Fontes e ícones: cache primeiro. APIs e Supabase: nunca passam pelo cache. */
+-const VERSION = 'bivvo-v11-41-13-dividend-detection';
+-const SHELL = ['./', './index.html', './app.css?v=11.41.13', './js/main.js?v=11.41.13', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
++const VERSION = 'bivvo-v11-41-14-portfolio-evolution';
++const SHELL = ['./', './index.html', './app.css?v=11.41.14', './js/main.js?v=11.41.14', './fonts/bricolage.woff2', './icon-192.png', './manifest.webmanifest'];
+ self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).catch(() => {})); });
+ self.addEventListener('activate', e => e.waitUntil(Promise.all([self.clients.claim(), caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION && k !== 'bivvo-share').map(k => caches.delete(k))))])));
+ self.addEventListener('fetch', e => {
+--- a/bivvo_1139/js/views/investment-charts.js
++++ b/bivvo_1139/js/views/investment-charts.js
+@@ -1,6 +1,8 @@
+ /* Proventos registrados e composição atual da carteira. */
+ import { h, s as svg, money, money0, today, ymOf, addMonthsYM, monthShort, monthLabel, num, round2, uid, parseMoney, shortDate } from '../util.js';
+ import * as F from '../finance.js';
++import { dividendRows } from '../investment-income.js';
++import { portfolioEvolution } from './investment-evolution.js';
+ import { investmentSector, investmentSectorInfo } from '../investment-sectors.js';
+ import * as store from '../store.js';
+ import { openSheet, field, toast } from '../ui.js';
+@@ -9,15 +11,7 @@
+ const percent=n=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+ const sector=investmentSector;
+ const received=t=>F.isPaid(t)&&t.date<=today();
+-const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+-export const dividendRows=s=>s.transactions.filter(t=>{
+- if(!F.isRealIncome(t)||F.isWithdraw(t))return false;
+- const category=normalized(t.cat),description=normalized(t.desc);
+- const explicit=t.transactionRole==='investment_dividend';
+- if(!explicit&&(['salario','freelance','reembolso','venda','vale/beneficio'].includes(category)||/\b(resgate|resgatado|venda de (ativo|acao|cota)|devolucao do principal)\b/.test(description)||t.transactionRole==='loan_interest_income'||category==='juros / emprestimo'))return false;
+- return explicit||/^(rendimentos?|proventos?|dividendos?|jcp|juros sobre (o )?capital proprio|cupons?|juros de investimentos)$/.test(category)||
+-   /\b(dividendos?|proventos?|jcp|juros sobre (o )?capital proprio|rendimento(s)? (de|do|da|sobre)|cupom (de|do))\b/.test(description);
+-});
++export { dividendRows } from '../investment-income.js';
+ export function dividendBuckets(rows,keys,annual=false){
+   return keys.map(key=>{const items=rows.filter(t=>(annual?t.date.slice(0,4):ymOf(t.date))===key);
+     return {key,items,paid:round2(items.filter(received).reduce((a,t)=>a+num(t.value),0)),pending:round2(items.filter(t=>!received(t)).reduce((a,t)=>a+num(t.value),0))};});
+@@ -83,6 +77,7 @@
+   },{reason:'demo-dividend-compatibility',silent:true});
+  }
+  const host=h('div.invest-charts');
++ host.append(portfolioEvolution(s));
+  const all=dividendRows(s),controls=h('div.invest-chart-controls');
+  const mode=h('select.input.sm',{'aria-label':'Agrupamento dos proventos'},h('option',{value:'monthly'},'Mensal'),h('option',{value:'annual'},'Anual'));
+  const dividendYears=[...new Set(all.map(t=>t.date.slice(0,4)))].filter(y=>/^\d{4}$/.test(y)&&y!==today().slice(0,4)).sort().reverse();
+--- /dev/null
++++ b/bivvo_1139/js/investment-income.js
+@@ -0,0 +1,21 @@
++/* Identificação de recebimentos dos investimentos; não inclui resgates. */
++const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
++export function isInvestmentDividend(t){
++ if(t.type!=='income'||t.kind==='opening'||t.cat==='Saldo inicial'||t.kind==='withdraw'||t.goalId||t.transactionRole==='loan_principal_return')return false;
++ const category=normalized(t.cat),description=normalized(t.desc);
++ const explicit=t.transactionRole==='investment_dividend';
++ if(!explicit&&(['salario','freelance','reembolso','venda','vale/beneficio'].includes(category)||/\b(resgate|resgatado|venda de (ativo|acao|cota)|devolucao do principal)\b/.test(description)||t.transactionRole==='loan_interest_income'||category==='juros / emprestimo'))return false;
++ return explicit||/^(rendimentos?|proventos?|dividendos?|jcp|juros sobre (o )?capital proprio|cupons?|juros de investimentos)$/.test(category)||
++   /\b(dividendos?|proventos?|jcp|juros sobre (o )?capital proprio|rendimento(s)? (de|do|da|sobre)|cupom (de|do))\b/.test(description);
++}
++export const dividendRows=s=>(s.transactions||[]).filter(isInvestmentDividend);
++export function dividendAssetId(t,s){
++ if(t.investmentId)return t.investmentId;
++ const text=String(t.desc||'').toUpperCase();
++ const matches=[...(s.investments||[]),...(s.profile?.investmentArchive||[])].filter(x=>{
++  const ticker=String(x.ticker||x.symbol||x.name||'').trim().toUpperCase().replace(/\.SA$/,'');
++  return /^[A-Z][A-Z0-9]{3}\d{1,2}$/.test(ticker)&&text.split(/[^A-Z0-9]+/).includes(ticker);
++ });
++ const ids=[...new Set(matches.map(x=>x.id))];
++ return ids.length===1?ids[0]:null;
++}
+--- /dev/null
++++ b/bivvo_1139/js/investment-evolution.js
+@@ -0,0 +1,86 @@
++/* Histórico da carteira: fluxos de capital separados de rendimento/valorização. */
++import { dividendRows, dividendAssetId } from './investment-income.js';
++import { today, ymOf, round2, num, addMonthsYM } from './util.js';
++import { investmentValue, isPaid, isWithdraw } from './finance.js';
++export function investmentMovements(s){
++ const rows=[];
++ for(const t of s.transactions||[]){
++  if(!isPaid(t)||t.date>today())continue;
++  const deposit=t.type==='expense'&&(t.investmentId||t.cat==='Investimentos')&&!t.goalId;
++  const withdrawal=t.type==='income'&&!t.goalId&&(t.transactionRole==='investment_withdrawal'||(isWithdraw(t)&&(t.investmentId||t.cat==='Investimentos'||/resgate/i.test(t.desc||''))));
++  if(deposit||withdrawal)rows.push({id:t.id,date:t.date,value:num(t.value),type:deposit?'deposit':'withdrawal',description:t.desc,source:'Extrato',investmentId:t.investmentId});
++ }
++ for(const m of s.profile?.investmentMovements||[]){
++  if(['deposit','withdrawal'].includes(m.type)&&m.value>0&&m.date<=today())rows.push({...m,value:num(m.value),source:'Histórico informado'});
++ }
++ for(const inv of new Map([...(s.profile?.investmentArchive||[]),...(s.investments||[])].map(x=>[x.id,x])).values()){
++  if(inv.purchaseDate&&inv.purchaseDate<=today()&&!rows.some(x=>x.type==='deposit'&&(x.id===inv.txId||(x.investmentId===inv.id&&(x.source==='Extrato'||x.date===inv.purchaseDate))))){
++   rows.push({id:'legacy-'+inv.id,date:inv.purchaseDate,value:num(inv.costBasis??inv.value),type:'deposit',description:'Aplicação em '+inv.name,source:'Cadastro do investimento',investmentId:inv.id});
++  }
++ }
++ return rows;
++}
++export function investmentEvolution(s,months){
++ const movements=investmentMovements(s),current=ymOf(today());
++ return months.map(month=>{
++  const items=movements.filter(x=>ymOf(x.date)===month);
++  const deposits=round2(items.filter(x=>x.type==='deposit').reduce((a,x)=>a+x.value,0));
++  const withdrawals=round2(items.filter(x=>x.type==='withdrawal').reduce((a,x)=>a+x.value,0));
++  const base=portfolioMonthBalance(s,addMonthsYM(month,-1)),actual=portfolioMonthBalance(s,month);
++  const balance=actual.value;
++  const opening=base.value;
++  const gain=balance!==null&&opening!==null?round2(balance-opening-deposits+withdrawals):null;
++  const knownIds=new Set(actual.assets.map(x=>x.id));
++  const payments=dividendRows(s).filter(t=>isPaid(t)&&t.date<=today()&&ymOf(t.date)===month);
++  const dividendItems=payments.filter(t=>knownIds.has(dividendAssetId(t,s)));
++  const dividends=round2(dividendItems.reduce((a,t)=>a+num(t.value),0));
++  const unlinkedDividends=round2(payments.filter(t=>!knownIds.has(dividendAssetId(t,s))).reduce((a,t)=>a+num(t.value),0));
++  const totalReturn=gain===null?null:round2(gain+dividends);
++  let fixedGain=0,marketGain=0;
++  const unallocated=items.some(x=>!x.investmentId);
++  for(const asset of actual.assets){
++    const prev=base.assets.find(x=>x.id===asset.id);
++    if(!prev||asset.value===null||prev.value===null||unallocated){if(['CDB','Renda fixa','Poupança'].includes(asset.type))fixedGain=null;else marketGain=null;continue;}
++    const flows=items.filter(x=>x.investmentId===asset.id),net=flows.reduce((a,x)=>a+(x.type==='deposit'?x.value:-x.value),0);
++    const growth=asset.value-prev.value-net;
++    if(['CDB','Renda fixa','Poupança'].includes(asset.type)){if(fixedGain!==null)fixedGain+=growth;}else if(marketGain!==null)marketGain+=growth;
++  }
++  if(fixedGain!==null)fixedGain=round2(fixedGain);
++  if(marketGain!==null)marketGain=round2(marketGain);
++  const rate=totalReturn!==null&&opening>0&&deposits===0&&withdrawals===0?totalReturn/opening:null;
++  return {assets:actual.assets,missing:actual.missing,estimated:actual.estimated||base.estimated,dividendItems,unlinkedDividends,fixedGain,marketGain,dividends,totalReturn,month,items,deposits,withdrawals,net:round2(deposits-withdrawals),opening,balance,gain,rate,partial:month===current,balanceSource:'Valores dos ativos cadastrados'};
++ });
++}
++
++/* Valores mensais por ativo. Não aplica cotação atual a meses passados. */
++export function assetMonthlyValue(inv,month,s){
++ const [year,m]=month.split('-').map(Number);
++ const end=month+'-'+String(new Date(year,m,0).getDate()).padStart(2,'0');
++ const cutoff=month===ymOf(today())?today():end;
++ const lastWeekday=new Date(year,m,0,12);while([0,6].includes(lastWeekday.getDay()))lastWeekday.setDate(lastWeekday.getDate()-1);
++ const minClosingDate=month+'-'+String(lastWeekday.getDate()).padStart(2,'0');
++ if(inv.purchaseDate&&inv.purchaseDate>cutoff||inv.closedAt&&inv.closedAt<=cutoff)return {value:0,source:'Fora da posição neste mês',estimated:false};
++ const records=(s.profile?.investmentValuations||[]).filter(r=>r.investmentId===inv.id&&ymOf(r.date)===month&&r.date<=cutoff&&(month===ymOf(today())||r.date>=minClosingDate)&&Number.isFinite(Number(r.value))&&Number(r.value)>=0).sort((a,b)=>b.date.localeCompare(a.date));
++ const manual=(s.profile?.investmentMovements||[]).filter(m=>m.investmentId===inv.id&&ymOf(m.date)===month&&m.date<=cutoff&&m.createdAt);
++ if(manual.some(m=>!records.some(r=>r.date>=m.date&&(r.recordedAt||0)>=m.createdAt)))return {value:null,source:'Informe a posição real após a movimentação histórica para apurar o rendimento',estimated:false};
++ if(records.length)return {value:round2(records[0].value),source:records[0].source+' · '+records[0].date,estimated:false};
++ if(['CDB','Renda fixa'].includes(inv.type)&&inv.yieldRate!=null&&inv.purchaseDate){
++  let label='Taxa prefixada cadastrada';
++  if(inv.yieldType==='Pós-fixado'){
++   if(!['CDI','SELIC'].includes(inv.yieldIndex||'CDI'))return {value:null,source:'Falta histórico do indexador '+(inv.yieldIndex||''),estimated:false};
++   if(month!==ymOf(today()))return {value:null,source:'Sem série histórica do '+(inv.yieldIndex||'CDI')+'. Registre o saldo real da instituição neste mês.',estimated:false};
++   label='Estimativa com taxa cadastrada e '+(inv.yieldIndex||'CDI')+' de referência; não é CDI histórico';
++  }
++  const anchor=(s.profile?.investmentValuations||[]).filter(r=>r.investmentId===inv.id&&r.date<cutoff&&Number.isFinite(Number(r.value))).sort((a,b)=>b.date.localeCompare(a.date))[0];
++  const position=anchor?{...inv,value:anchor.value,purchaseDate:anchor.date}:inv;
++  return {value:investmentValue(position,s,cutoff),source:label+' · antes de impostos',estimated:true};
++ }
++ if(month===ymOf(today())&&!inv.closedAt){if(['Ações','Fundos','Cripto'].includes(inv.type)&&(!inv.quoteAt||ymOf(inv.quoteAt)!==month))return {value:null,source:'Atualize a cotação deste mês ou informe o valor real do ativo',estimated:false};return {value:investmentValue(inv,s),source:inv.quoteAt?'Cotação registrada em '+inv.quoteAt:'Valor atual cadastrado',estimated:false};}
++ return {value:null,source:'Sem cotação ou valor histórico deste ativo',estimated:false};
++}
++export function portfolioMonthBalance(s,month){
++ const map=new Map([...(s.profile?.investmentArchive||[]),...(s.investments||[])].map(x=>[x.id,x]));
++ const assets=[...map.values()].map(inv=>({id:inv.id,name:inv.name,type:inv.type,...assetMonthlyValue(inv,month,s)}));
++ const missing=assets.filter(x=>x.value===null);
++ return {value:missing.length?null:round2(assets.reduce((a,x)=>a+x.value,0)),assets,estimated:assets.some(x=>x.estimated),missing};
++}
+--- /dev/null
++++ b/bivvo_1139/js/views/investment-evolution.js
+@@ -0,0 +1,112 @@
++import { h,s as svg,money,money0,today,ymOf,addMonthsYM,monthLabel,shortDate,parseMoney,round2,uid } from '../util.js';
++import * as store from '../store.js';
++import { investmentEvolution } from '../investment-evolution.js';
++import { investmentValue } from '../finance.js';
++import { openSheet,field,toast } from '../ui.js';
++const pct=n=>(n*100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%';
++const closingDate=month=>{const [y,m]=month.split('-').map(Number);return month+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');};
++function recordClosing(s,month=ymOf(today())){
++ const selected=h('input.input',{type:'month',value:month,max:ymOf(today()),'aria-label':'Mês do valor do ativo'});
++ const asset=h('select.input',{'aria-label':'Ativo do histórico'},s.investments.map(x=>h('option',{value:x.id},x.name)));
++ const amount=h('input.input',{inputmode:'decimal','aria-label':'Valor total do ativo no mês'});
++ const msg=h('p.form-msg',{role:'alert'});
++ const update=()=>{const row=(s.profile.investmentValuations||[]).filter(x=>x.investmentId===asset.value&&ymOf(x.date)===selected.value).sort((a,b)=>b.date.localeCompare(a.date))[0];amount.value=row?String(row.value).replace('.',','):'';};
++ selected.addEventListener('change',update);asset.addEventListener('change',update);update();
++ let sheet;
++ const form=h('form.form',{onsubmit:e=>{e.preventDefault();save();}},field('Ativo',asset),field('Mês',selected),field('Valor total desse ativo no mês',amount),h('p.notice','Use a posição real do extrato da corretora: quantidade × cotação, ou saldo informado pela instituição. O registro completa o histórico desse ativo e não altera seu saldo de caixa. Não há preenchimento por taxa arbitrária.'),msg);
++ sheet=openSheet({title:'Registrar valor histórico do ativo',content:form,footer:[h('button.btn.primary',{type:'button',onclick:()=>form.requestSubmit()},'Salvar valor do ativo')]});
++ function save(){
++  const value=parseMoney(amount.value),month=selected.value;
++  if(!asset.value||!/^\d{4}-\d{2}$/.test(month)||month>ymOf(today())||!amount.value.trim()||value<0){msg.textContent='Selecione o ativo, um mês válido e um valor não negativo.';return;}
++  const date=month===ymOf(today())?today():closingDate(month);
++  store.commit(st=>{st.profile.investmentValuations=[...(st.profile.investmentValuations||[]).filter(x=>!(x.investmentId===asset.value&&ymOf(x.date)===month)),{investmentId:asset.value,value:round2(value),date,source:'Valor histórico informado',recordedAt:Date.now()}];});
++  sheet.close();toast('Histórico do ativo registrado.');
++ }
++}
++function captureObservations(s){
++ const additions=[];
++ for(const inv of s.investments){
++  if(['CDB','Renda fixa'].includes(inv.type)||inv.purchaseDate>today()||(['Ações','Fundos','Cripto'].includes(inv.type)&&!inv.quoteAt))continue;
++  const date=inv.quoteAt||today(),value=investmentValue(inv,s);
++  const previous=(s.profile.investmentValuations||[]).find(x=>x.investmentId===inv.id&&x.date===date);
++  if(previous?.source==='Valor histórico informado')continue;
++  if(previous&&previous.value===value)continue;
++  additions.push({investmentId:inv.id,value,date,source:inv.quoteAt?'Cotação registrada':'Valor atual cadastrado',recordedAt:Date.now()});
++ }
++ if(additions.length)store.commit(st=>{for(const row of additions)st.profile.investmentValuations=[...(st.profile.investmentValuations||[]).filter(x=>!(x.investmentId===row.investmentId&&x.date===row.date)),row];},{silent:true,reason:'investment-observations'});
++}
++function recordMovement(s){
++ const type=h('select.input',{'aria-label':'Tipo de movimentação'},h('option',{value:'deposit'},'Aporte'),h('option',{value:'withdrawal'},'Retirada'));
++ const asset=h('select.input',{'aria-label':'Ativo da movimentação'},s.investments.map(x=>h('option',{value:x.id},x.name)));
++ const amount=h('input.input',{inputmode:'decimal','aria-label':'Valor da movimentação'});
++ const date=h('input.input',{type:'date',value:today(),max:today(),'aria-label':'Data da movimentação'});
++ const desc=h('input.input',{maxlength:80,'aria-label':'Descrição da movimentação',placeholder:'Ex.: aporte de dezembro'});
++ const msg=h('p.form-msg',{role:'alert'});
++ let sheet;const form=h('form.form',{onsubmit:e=>{e.preventDefault();save();}},field('Tipo',type),field('Ativo',asset),field('Valor',amount),field('Data',date),field('Descrição',desc),h('p.notice','Use para completar o histórico de aportes e retiradas que ainda não constam no gráfico. Não duplica no extrato nem altera suas posições atuais. Aplicações e resgates registrados no app já entram automaticamente. Após completar uma movimentação histórica, informe o valor real do ativo no mês para conferir o rendimento.'),msg);
++ sheet=openSheet({title:'Completar histórico de movimentações',content:form,footer:[h('button.btn.primary',{type:'button',onclick:()=>form.requestSubmit()},'Salvar movimentação')]});
++ function save(){const value=parseMoney(amount.value);if(!asset.value||!(value>0)||!date.value||date.value>today()){msg.textContent='Informe valor positivo e data até hoje.';return;}
++ store.commit(st=>{st.profile.investmentMovements=[...(st.profile.investmentMovements||[]),{id:uid(),type:type.value,investmentId:asset.value,value:round2(value),date:date.value,createdAt:Date.now(),description:desc.value.trim()||(type.value==='deposit'?'Aporte informado':'Retirada informada')}];});sheet.close();toast('Movimentação adicionada ao histórico.');}
++}
++export function portfolioEvolution(s){
++ captureObservations(s);
++ const card=h('section.card.portfolio-evolution');
++ const years=[...new Set([...(s.profile.investmentValuations||[]).map(x=>x.date.slice(0,4)),...s.investments.map(x=>(x.purchaseDate||today()).slice(0,4)),...(s.profile.investmentMovements||[]).map(x=>x.date.slice(0,4))])].filter(y=>y!==today().slice(0,4)).sort().reverse();
++ const period=h('select.input.sm',{'aria-label':'Período da evolução da carteira'},h('option',{value:'6'},'Últimos 6 meses'),h('option',{value:'12'},'Últimos 12 meses'),h('option',{value:'year'},'Ano atual'),years.map(y=>h('option',{value:'y:'+y},'Ano '+y)));
++ const view=h('select.input.sm',{'aria-label':'Visualização da evolução'},h('option',{value:'returns'},'Rendimentos por origem'),h('option',{value:'flows'},'Aportes e retiradas'));
++ const body=h('div.portfolio-evolution-body');
++ card.append(h('div.card-head',h('div',h('h3','Evolução dos investimentos'),h('p.hint','Aportes, retiradas, saldo e rendimento da carteira.')),h('div.evolution-controls',view,period)),
++ h('div.btn-row.portfolio-actions',h('button.btn.sm',{type:'button',onclick:()=>recordClosing(s)},'Registrar valor do ativo'),h('button.btn.sm',{type:'button',onclick:()=>recordMovement(s)},'Registrar aporte ou retirada')),body);
++ function draw(){
++  const cur=ymOf(today()),year=period.value.startsWith('y:')?period.value.slice(2):cur.slice(0,4);
++  const months=period.value==='year'||period.value.startsWith('y:')?Array.from({length:12},(_,i)=>year+'-'+String(i+1).padStart(2,'0')).filter(x=>x<=cur):Array.from({length:Number(period.value)},(_,i)=>addMonthsYM(cur,i-Number(period.value)+1));
++  const rows=investmentEvolution(s,months),series=row=>view.value==='flows'?[[row.deposits,'#3977cb'],[-row.withdrawals,'#ce5577']]:[[row.fixedGain,'#7840c4'],[row.marketGain,'#b98521'],[row.dividends,'#00876c']];
++  const max=Math.max(1,...rows.flatMap(r=>series(r).map(([value])=>Math.abs(value||0))));
++  const chart=svg('svg',{viewBox:'0 0 900 330',role:'group','aria-label':'Aportes, retiradas e rendimento por mês'});
++  const width=810/rows.length,zero=170,scale=120/max;
++  for(let i=-1;i<=1;i++){const y=zero-i*120;chart.append(svg('line',{x1:65,x2:885,y1:y,y2:y,class:'dividend-gridline'}),svg('text',{x:55,y:y+4,'text-anchor':'end',class:'dividend-axis'},(max*i).toLocaleString('pt-BR',{notation:'compact',maximumFractionDigits:1})));}
++  const detail=row=>{
++   const eq=(label,value)=>h('div.month-origin-equation',h('span',label),h('b',value===null?'Sem saldo registrado':money(value)));
++   let sheet;
++   sheet=openSheet({title:monthLabel(row.month),subtitle:'Origem da evolução dos investimentos',wide:true,content:h('div.month-origin',
++    eq('Saldo anterior',row.opening),eq('Aportes',row.deposits),eq('Retiradas',row.withdrawals),eq(row.partial?'Saldo atual · mês em andamento':'Saldo no mês',row.balance),eq('Renda fixa · taxa cadastrada',row.fixedGain),eq('Valorização / desvalorização',row.marketGain),eq('Dividendos e rendimentos pagos',row.dividends),eq('Resultado total dos investimentos',row.totalReturn),
++    row.rate!==null?h('p.notice','Resultado total sobre o saldo anterior, sem aportes ou retiradas: '+pct(row.rate)+'.'):null,
++    h('p.hint',row.gain===null?'Para completar o cálculo, registre os valores históricos dos ativos que estão sem cotação neste mês ou no mês anterior.':'Cálculo: saldo do mês − saldo anterior − aportes + retiradas. Para renda fixa, o valor atual usa a taxa cadastrada; em ações e fundos, inclui variação de cotação.'),
++    h('h3','Base por ativo'),h('ul.category-purchase-list',row.assets.map(x=>h('li',h('div',h('b',x.name),h('small',x.source+(x.estimated?' · estimado':''))),h('strong',x.value===null?'Sem histórico':money(x.value))))),
++    h('h3','Dividendos e rendimentos pagos'),h('ul.category-purchase-list',row.dividendItems.map(t=>h('li',h('div',h('b',t.desc),h('small',shortDate(t.date))),h('strong',money(t.value))))),
++    row.unlinkedDividends>0?h('p.notice',money(row.unlinkedDividends)+' de proventos sem ativo vinculado ficam no gráfico de proventos e não entram no resultado por ativos até serem vinculados.'):null,
++    h('h3','Aportes e retiradas'),h('ul.category-purchase-list',row.items.map(x=>h('li',h('div',h('b',x.description),h('small',shortDate(x.date)+' · '+x.source)),h('strong',(x.type==='withdrawal'?'− ':'+ ')+money(x.value)),
++      x.source==='Histórico informado'?h('button.link.sm',{type:'button','aria-label':'Excluir movimentação '+x.description,onclick:()=>{store.commit(st=>{st.profile.investmentMovements=st.profile.investmentMovements.filter(m=>m.id!==x.id);});sheet.close();}},'Excluir'):null))),
++    row.items.length?null:h('p.muted.sm','Nenhum aporte ou retirada neste mês.')),
++    footer:[h('button.btn',{type:'button',onclick:()=>{sheet.close();setTimeout(()=>recordClosing(s,row.month),240);}},'Informar valor histórico de um ativo')]});
++  };
++  rows.forEach((row,i)=>{
++   const x=65+i*width,w=width*(view.value==='flows'?.3:.22);
++   const g=svg('g',{tabindex:0,role:'button','aria-label':monthLabel(row.month)+': aportes '+money(row.deposits)+', retiradas '+money(row.withdrawals)+', rendimento '+(row.gain===null?'não apurado':money(row.gain)),class:'portfolio-flow-bar'});
++   g.append(svg('rect',{x:x+3,y:35,width:width-6,height:260,fill:'transparent'}));
++   series(row).forEach(([value,color],j)=>{if(value===null||value===0)return;const height=Math.max(1,Math.abs(value)*scale);g.append(svg('rect',{x:x+width*.1+j*(w+width*.025),y:value>=0?zero-height:zero,width:w,height,rx:2,fill:color}));});
++   g.addEventListener('click',()=>detail(row));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();detail(row);}});chart.append(g);
++   chart.append(svg('text',{x:x+width/2,y:318,'text-anchor':'middle',class:'dividend-axis'},row.month.slice(5)+'/'+row.month.slice(2,4)));
++  });
++  const balances=rows.filter(r=>r.balance!==null),maxBalance=Math.max(1,...balances.map(r=>r.balance));
++  const line=svg('svg',{viewBox:'0 0 900 230',role:'group','aria-label':'Evolução do saldo dos investimentos'});
++  for(let i=0;i<=3;i++){const y=180-i*50;line.append(svg('line',{x1:65,x2:885,y1:y,y2:y,class:'dividend-gridline'}),svg('text',{x:55,y:y+4,'text-anchor':'end',class:'dividend-axis'},(maxBalance*i/3).toLocaleString('pt-BR',{notation:'compact',maximumFractionDigits:1})));}
++  let previous=null;
++  rows.forEach((row,i)=>{
++   const x=65+width*(i+.5),y=180-(row.balance||0)/maxBalance*150;
++   if(row.balance!==null){if(previous)line.append(svg('line',{x1:previous.x,y1:previous.y,x2:x,y2:y,stroke:'#00876c','stroke-width':3}));
++    const dot=svg('circle',{cx:x,cy:y,r:5,fill:'#00876c',tabindex:0,role:'button','aria-label':monthLabel(row.month)+': saldo '+money(row.balance)});
++    dot.append(svg('title',{},money(row.balance)));dot.addEventListener('click',()=>detail(row));dot.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();detail(row);}});line.append(dot);previous={x,y};
++   }else previous=null;
++   line.append(svg('text',{x,y:210,'text-anchor':'middle',class:'dividend-axis'},row.month.slice(5)+'/'+row.month.slice(2,4)));
++  });
++  const table=h('div.portfolio-history-table',h('div.portfolio-history-head',h('span','Mês'),h('span','Aportes'),h('span','Retiradas'),h('span','Renda fixa'),h('span','Valorização'),h('span','Dividendos'),h('span','Resultado total'),h('span','Saldo')));
++  rows.forEach(row=>table.append(h('button',{type:'button',onclick:()=>detail(row)},h('b',row.month.slice(5)+'/'+row.month.slice(0,4)),h('span',money0(row.deposits)),h('span',money0(row.withdrawals)),h('span',row.fixedGain===null?'Sem histórico':money(row.fixedGain)+(row.estimated?' *':'')),h('span',row.marketGain===null?'Sem histórico':money(row.marketGain)),h('span',money(row.dividends)),h('span',row.totalReturn===null?'A apurar':money(row.totalReturn)+(row.rate!==null?' · '+pct(row.rate):'')),h('span',row.balance===null?'Sem registro':money(row.balance)+(row.partial?' *':'')))));
++  body.replaceChildren(h('h4',view.value==='flows'?'Aportes e retiradas do mês':'Rendimento dos ativos e dividendos'),h('div.dividend-key',...(view.value==='flows'?[['Aportes','#3977cb'],['Retiradas','#ce5577']]:[['Renda fixa','#7840c4'],['Valorização dos ativos','#b98521'],['Dividendos recebidos','#00876c']]).map(([label,color])=>h('span',h('i',{vars:{'--slice-color':color},class:'flow-color'}),label))),
++    h('p.hint','Valores em R$. Retiradas e perdas aparecem abaixo de zero. Deslize para ver todos os meses.'),
++    h('div.dividend-chart-scroll',chart),h('h4','Evolução do saldo da carteira'),h('div.dividend-chart-scroll',line),h('div.portfolio-table-scroll',table),
++    h('p.hint','Resultado total = renda fixa + valorização dos ativos + dividendos pagos. Aportes e retiradas são separados. Dividendos recebidos fora da carteira não aumentam a linha do saldo até serem reinvestidos. Percentual apenas em meses sem movimentações, com saldo anterior positivo.'),
++    ...(rows.some(r=>r.unlinkedDividends>0)?[h('p.notice','Há proventos sem ativo vinculado. Eles continuam no gráfico de proventos; vincule-os ao ativo para incluí-los no resultado da carteira.')]:[]),
++    h('p.hint','Base: ativos cadastrados, taxas informadas, cotações registradas e dividendos recebidos vinculados. Sem cotação histórica, não inventamos a valorização. * Renda fixa é estimativa antes de impostos; CDI/SELIC usa a referência cadastrada, não uma série histórica do indexador.'));
++ }
++ period.addEventListener('change',draw);view.addEventListener('change',draw);draw();return card;
++}
+--- /dev/null
++++ b/bivvo_1139/tests/investment-evolution.test.mjs
+@@ -0,0 +1,35 @@
++import assert from 'node:assert/strict';
++const RealDate=Date;const fixed=new RealDate(2027,1,28,12).getTime();
++globalThis.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[fixed]));}static now(){return fixed;}};
++globalThis.window={addEventListener(){}};
++globalThis.sessionStorage={getItem(){return null},setItem(){},removeItem(){}};
++globalThis.localStorage=globalThis.sessionStorage;
++const {emptyState}=await import('../js/store.js');
++const {investmentEvolution,investmentMovements}=await import('../js/investment-evolution.js');
++const {investmentValue}=await import('../js/finance.js');
++const near=(a,b)=>assert(Math.abs(a-b)<.02,a+' vs '+b);
++const deposit=(date,value,id='fixed')=>({id:'deposit'+date,type:'expense',cat:'Investimentos',kind:'save',investmentId:id,date,value,status:'Pago',desc:'Aporte'});
++const dividend=(date,value,id='fixed')=>({id:'div'+date,type:'income',cat:'Rendimentos',transactionRole:'investment_dividend',investmentId:id,date,value,status:'Pago',desc:'Dividendo'});
++let s=emptyState();s.investments=[{id:'fixed',name:'Prefixado 1% ao mês',type:'CDB',purchaseDate:'2026-12-31',value:100000,costBasis:100000,yieldMode:'fixed',yieldType:'Prefixado',yieldRate:1,yieldPeriod:'monthly'}];s.transactions=[deposit('2026-12-31',100000)];
++let rows=investmentEvolution(s,['2026-12','2027-01','2027-02']);
++near(rows[0].balance,100000);near(rows[1].balance,101000);near(rows[1].fixedGain,1000);near(rows[1].rate,.01);near(rows[2].balance,102010);near(rows[2].fixedGain,1010);near(rows[2].rate,.01);near(investmentValue(s.investments[0],s),102010);
++s.transactions.push(dividend('2027-01-31',1000),dividend('2027-02-28',1000));
++rows=investmentEvolution(s,['2027-01','2027-02']);for(const row of rows){near(row.balance,100000);near(row.fixedGain,0);near(row.dividends,1000);near(row.totalReturn,1000);}
++s=emptyState();s.investments=[{id:'stock',name:'WEGE3',type:'Ações',purchaseDate:'2026-12-01',quantity:50,marketPrice:1000,costBasis:60000}];
++s.transactions=[deposit('2026-12-01',60000,'stock'),{id:'withdraw',type:'income',cat:'Rendimentos',kind:'withdraw',transactionRole:'investment_withdrawal',investmentId:'stock',date:'2026-12-15',value:10000,status:'Pago',desc:'Resgate'}];
++s.profile.investmentValuations=[{investmentId:'stock',date:'2026-12-31',value:50000,source:'Corretora'},{investmentId:'stock',date:'2027-01-31',value:51000,source:'Corretora'}];
++rows=investmentEvolution(s,['2026-12','2027-01']);near(rows[0].deposits,60000);near(rows[0].withdrawals,10000);near(rows[0].net,50000);near(rows[0].gain,0);near(rows[1].marketGain,1000);near(rows[1].rate,.02);
++s.profile.investmentValuations=[{investmentId:'stock',date:'2026-12-31',value:1000,source:'Corretora'},{investmentId:'stock',date:'2027-01-31',value:900,source:'Corretora'}];s.transactions=[dividend('2027-01-15',100,'stock')];
++rows=investmentEvolution(s,['2027-01']);near(rows[0].marketGain,-100);near(rows[0].dividends,100);near(rows[0].totalReturn,0);
++s.profile.investmentValuations[1].value=1100;s.transactions.push(deposit('2027-01-15',100,'stock'));
++rows=investmentEvolution(s,['2027-01']);near(rows[0].marketGain,0);near(rows[0].dividends,100);near(rows[0].totalReturn,100);
++delete s.profile.investmentValuations;rows=investmentEvolution(s,['2027-01']);assert.equal(rows[0].marketGain,null);assert.equal(rows[0].balance,null);assert.equal(rows[0].totalReturn,null);near(rows[0].dividends,100);
++s=emptyState();s.profile.investmentArchive=[{id:'fixed',name:'CDB resgatado',type:'CDB',purchaseDate:'2026-12-31',closedAt:'2027-01-31',value:100000,costBasis:100000,yieldType:'Prefixado',yieldRate:1,yieldPeriod:'monthly'}];s.transactions=[{id:'out',type:'income',cat:'Rendimentos',kind:'withdraw',transactionRole:'investment_withdrawal',investmentId:'fixed',date:'2027-01-31',value:101000,status:'Pago'}];
++rows=investmentEvolution(s,['2027-01']);near(rows[0].opening,100000);near(rows[0].balance,0);near(rows[0].fixedGain,1000);near(rows[0].totalReturn,1000);
++s.transactions.push({id:'goal',type:'expense',kind:'save',cat:'Reserva de Emergência',goalId:'g',date:'2027-01-05',value:500,status:'Pago'},{id:'pending',type:'expense',cat:'Investimentos',date:'2027-01-10',value:1000,status:'Pendente'});
++assert.equal(investmentMovements(s).length,2);
++s=emptyState();s.investments=[{id:'post',name:'CDB CDI',type:'CDB',purchaseDate:'2026-12-31',value:100000,costBasis:100000,yieldType:'Pós-fixado',yieldRate:110,yieldIndex:'CDI'}];
++rows=investmentEvolution(s,['2027-01']);assert.equal(rows[0].balance,null);assert.equal(rows[0].fixedGain,null);
++s.profile.investmentValuations=[{investmentId:'post',date:'2026-12-31',value:100000,source:'Saldo da instituição'},{investmentId:'post',date:'2027-01-31',value:100900,source:'Saldo da instituição'}];
++rows=investmentEvolution(s,['2027-01']);near(rows[0].fixedGain,900);near(rows[0].totalReturn,900);assert.equal(rows[0].estimated,false);
++console.log('OK: 100 mil e 1% ao mês sem aportes, juros compostos de 1.000/1.010, cupons sem dupla contagem, 60 mil menos 10 mil, cotação real, dividendo com queda, reinvestimento, histórico ausente e resgate preservado.');
